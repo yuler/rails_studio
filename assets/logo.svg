@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="100%" height="120" fill="none">
+  <style>
+    .theme-card { fill: #ffffff; stroke: #e2e8f0; }
+    .theme-card-header { fill: #f8fafc; }
+    .theme-grid-border { stroke: #f1f5f9; }
+    .theme-header-border { stroke: #e2e8f0; }
+    .theme-text-main { fill: #0f172a; }
+    .theme-text-muted { fill: #64748b; }
+    .theme-text-subtle { fill: #475569; }
+    .theme-header-pill { fill: #94a3b8; }
+    .theme-badge-bg { fill: #f1f5f9; stroke: #cbd5e1; }
+    .theme-insp-bg { fill: #f1f5f9; stroke: #e2e8f0; }
+    .theme-ruby-text { fill: url(#rubyTextLight); }
+    .theme-ruby-gem { fill: url(#rubyGradLight); stroke: #fda4af; }
+    .theme-row-pk { fill: #64748b; }
+
+    @media (prefers-color-scheme: dark) {
+      .theme-card { fill: #18181b; stroke: #3f3f46; }
+      .theme-card-header { fill: #27272a; }
+      .theme-grid-border { stroke: #27272a; }
+      .theme-header-border { stroke: #3f3f46; }
+      .theme-text-main { fill: #f4f4f5; }
+      .theme-text-muted { fill: #a1a1aa; }
+      .theme-text-subtle { fill: #d4d4d8; }
+      .theme-header-pill { fill: #71717a; }
+      .theme-badge-bg { fill: #27272a; stroke: #3f3f46; }
+      .theme-insp-bg { fill: #27272a; stroke: #3f3f46; }
+      .theme-ruby-text { fill: url(#rubyTextDark); }
+      .theme-ruby-gem { fill: url(#rubyGradDark); stroke: #fecdd3; }
+      .theme-row-pk { fill: #a1a1aa; }
+    }
+  </style>
+
+  <defs>
+    <!-- Dark Mode Gradients -->
+    <linearGradient id="rubyGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4b6e" />
+      <stop offset="50%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#be123c" />
+    </linearGradient>
+    <linearGradient id="rubyTextDark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff3b5c" />
+      <stop offset="100%" stop-color="#e11d48" />
+    </linearGradient>
+
+    <!-- Light Mode Gradients -->
+    <linearGradient id="rubyGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="50%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#be123c" />
+    </linearGradient>
+    <linearGradient id="rubyTextLight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#be123c" />
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="shadowAuto" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- TABLE LOGO ICON -->
+  <g transform="translate(4, 0)">
+    <!-- Table Container -->
+    <rect class="theme-card" x="16" y="16" width="96" height="88" rx="14" stroke-width="1.5" filter="url(#shadowAuto)" />
+
+    <!-- Table Header Background -->
+    <path class="theme-card-header" d="M 16 30 Q 16 16 30 16 L 98 16 Q 112 16 112 30 L 112 42 L 16 42 Z" />
+
+    <!-- Column Dividers -->
+    <line class="theme-grid-border" x1="42" y1="16" x2="42" y2="104" stroke-width="1.2" />
+    <line class="theme-grid-border" x1="76" y1="16" x2="76" y2="104" stroke-width="1.2" />
+
+    <!-- Header Divider Line -->
+    <line class="theme-header-border" x1="16" y1="42" x2="112" y2="42" stroke-width="1" />
+
+    <!-- Header Content -->
+    <!-- Col 1: Primary Key Header -->
+    <text x="29" y="33" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="800" fill="#ef4444" text-anchor="middle">#</text>
+    <!-- Col 2: Name Header -->
+    <rect class="theme-header-pill" x="48" y="26" width="20" height="5" rx="2.5" />
+    <!-- Col 3: Relation Header -->
+    <rect class="theme-header-pill" x="82" y="26" width="22" height="5" rx="2.5" />
+
+    <!-- Row 1 -->
+    <line class="theme-grid-border" x1="16" y1="63" x2="112" y2="63" stroke-width="1" />
+    <text class="theme-row-pk" x="29" y="56" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" text-anchor="middle">1</text>
+    <rect x="47" y="49" width="22" height="6" rx="3" fill="#38bdf8" fill-opacity="0.85" />
+    <rect x="80" y="48" width="24" height="8" rx="4" fill="#a855f7" fill-opacity="0.22" stroke="#a855f7" stroke-width="0.8" />
+    <circle cx="85" cy="52" r="1.8" fill="#a855f7" />
+
+    <!-- Row 2 -->
+    <line class="theme-grid-border" x1="16" y1="84" x2="112" y2="84" stroke-width="1" />
+    <text class="theme-row-pk" x="29" y="77" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" text-anchor="middle">2</text>
+    <rect x="47" y="70" width="18" height="6" rx="3" fill="#38bdf8" fill-opacity="0.85" />
+    <rect x="80" y="69" width="24" height="8" rx="4" fill="#10b981" fill-opacity="0.22" stroke="#10b981" stroke-width="0.8" />
+    <circle cx="85" cy="73" r="1.8" fill="#10b981" />
+
+    <!-- Row 3 -->
+    <text class="theme-row-pk" x="29" y="97" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" text-anchor="middle">3</text>
+    <rect x="47" y="90" width="20" height="6" rx="3" fill="#f59e0b" fill-opacity="0.85" />
+    <rect x="80" y="89" width="24" height="8" rx="4" fill="#f43f5e" fill-opacity="0.22" stroke="#f43f5e" stroke-width="0.8" />
+    <circle cx="85" cy="93" r="1.8" fill="#f43f5e" />
+
+    <!-- Ruby Gem Corner Badge -->
+    <g transform="translate(94, 6)">
+      <polygon class="theme-ruby-gem" points="12,2 22,8 18,18 6,18 2,8" stroke-width="0.8" />
+      <line x1="6" y1="8" x2="18" y2="8" stroke="#ffe4e6" stroke-width="0.6" stroke-opacity="0.9" />
+      <line x1="6" y1="8" x2="12" y2="18" stroke="#ffe4e6" stroke-width="0.6" stroke-opacity="0.9" />
+      <line x1="18" y1="8" x2="12" y2="18" stroke="#ffe4e6" stroke-width="0.6" stroke-opacity="0.9" />
+    </g>
+  </g>
+
+  <!-- WORDMARK & TAGLINE -->
+  <g transform="translate(136, 0)">
+    <!-- Brand Title -->
+    <text x="0" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.5">
+      <tspan class="theme-text-main">Rails</tspan>
+      <tspan class="theme-ruby-text" dx="4">Studio</tspan>
+    </text>
+
+    <!-- Version / Engine Badge -->
+    <rect class="theme-badge-bg" x="226" y="32" width="62" height="22" rx="6" stroke-width="1" />
+    <text class="theme-text-muted" x="257" y="47" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11" font-weight="600" text-anchor="middle">v0.1.0</text>
+
+    <!-- Subtitle -->
+    <text class="theme-text-muted" x="1" y="78" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="500" letter-spacing="-0.1">
+      Modern Web Database Studio for Rails
+    </text>
+
+    <!-- Inspiration Badge -->
+    <g transform="translate(1, 91)">
+      <rect class="theme-insp-bg" x="0" y="0" width="292" height="20" rx="10" stroke-width="0.8" />
+      <circle cx="10" cy="10" r="3.5" fill="#ef4444" />
+      <text class="theme-text-subtle" x="20" y="14" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="500">
+        Inspired by <tspan font-weight="700">Prisma Studio</tspan> &amp; <tspan font-weight="700">Drizzle Studio</tspan>
+      </text>
+    </g>
+  </g>
+</svg>

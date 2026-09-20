@@ -4,6 +4,11 @@ export interface DatabaseInfo {
   rails_version: string;
   ruby_version: string;
   read_only: boolean;
+  configured_databases?: {
+    name: string;
+    adapter: string;
+    database: string;
+  }[];
 }
 
 export interface TableMeta {
@@ -84,6 +89,41 @@ export interface QueryResult {
   columns: string[];
   rows: any[][];
   count: number;
+  affected_rows?: number;
+  message?: string;
   duration_ms: number;
   error?: string;
+}
+
+export interface ConsoleQueryResult {
+  sql: string;
+  duration_ms: number;
+}
+
+export interface ConsoleError {
+  class: string;
+  message: string;
+  backtrace?: string[];
+}
+
+export interface ConsoleExecuteResponse {
+  result?: string;
+  result_type?: string;
+  stdout?: string;
+  queries?: ConsoleQueryResult[];
+  duration_ms?: number;
+  error?: ConsoleError;
+}
+
+export interface ConsoleModelMeta {
+  name: string;
+  table_name: string;
+  columns: string[];
+  associations: string[];
+}
+
+export interface ConsoleCompletionsResponse {
+  models: ConsoleModelMeta[];
+  common_methods: string[];
+  globals: string[];
 }

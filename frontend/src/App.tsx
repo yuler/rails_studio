@@ -5,6 +5,9 @@ import { TableView } from './components/TableView';
 import { SqlRunner } from './components/SqlRunner';
 import { ForeignKeyDrawer } from './components/ForeignKeyDrawer';
 import { InsertModal } from './components/InsertModal';
+import { RailsConsole } from './components/RailsConsole';
+import { CommandPalette } from './components/CommandPalette';
+import { ShortcutsModal } from './components/ShortcutsModal';
 import {
   DatabaseInfo,
   TableMeta,
@@ -49,6 +52,15 @@ export const App: React.FC = () => {
 
   // Insert Record Modal
   const [showInsertModal, setShowInsertModal] = useState<boolean>(false);
+
+  // Command Palette & Shortcuts Modal
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
+  const [showFilterBar, setShowFilterBar] = useState<boolean>(false);
+
+  // Rails Console State
+  const [consoleOpen, setConsoleOpen] = useState<boolean>(false);
+  const [consoleInitialCommand, setConsoleInitialCommand] = useState<string | undefined>();
 
   // Toast / notification banner
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -229,15 +241,131 @@ export const App: React.FC = () => {
     }
   };
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 1. Cmd/Ctrl + K -> Toggle Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // 2. Cmd/Ctrl + ` -> Toggle Rails Console
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'Backquote' || e.key === '`' || e.key === '~')) {
+        e.preventDefault();
+        setConsoleOpen((prev) => !prev);
+        return;
+      }
+
+      // 3. Cmd/Ctrl + S -> Save pending changes (prevent browser save page dialog)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (stagedChanges.size > 0 && !savingChanges) {
+          handleSaveChanges();
+        }
+        return;
+      }
+
+      // 4. Escape -> close topmost open overlay
+      if (e.key === 'Escape') {
+        if (commandPaletteOpen) {
+          e.preventDefault();
+          setCommandPaletteOpen(false);
+          return;
+        }
+        if (shortcutsModalOpen) {
+          e.preventDefault();
+          setShortcutsModalOpen(false);
+          return;
+        }
+        if (showInsertModal) {
+          e.preventDefault();
+          setShowInsertModal(false);
+          return;
+        }
+        if (fkDrawer) {
+          e.preventDefault();
+          setFkDrawer(null);
+          return;
+        }
+        if (consoleOpen) {
+          e.preventDefault();
+          setConsoleOpen(false);
+          return;
+        }
+        if (stagedChanges.size > 0) {
+          e.preventDefault();
+          handleDiscardChanges();
+          return;
+        }
+      }
+
+      // 5. Single key shortcuts (only if NOT in an input/textarea/select/editable element and no modals open)
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTyping =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        target?.isContentEditable;
+
+      if (isTyping || commandPaletteOpen || shortcutsModalOpen || showInsertModal || fkDrawer) {
+        return;
+      }
+
+      // '?' -> Open Shortcuts Modal
+      if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsModalOpen((prev) => !prev);
+        return;
+      }
+
+      // 'n' or 'N' -> New Record
+      if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey) {
+        if (selectedTable && activeTab === 'tables' && schema) {
+          e.preventDefault();
+          setShowInsertModal(true);
+        }
+        return;
+      }
+
+      // 'f' or 'F' -> Toggle Filters
+      if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey) {
+        if (selectedTable && activeTab === 'tables') {
+          e.preventDefault();
+          setShowFilterBar((prev) => !prev);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [
+    commandPaletteOpen,
+    shortcutsModalOpen,
+    showInsertModal,
+    fkDrawer,
+    consoleOpen,
+    stagedChanges.size,
+    savingChanges,
+    selectedTable,
+    activeTab,
+    schema,
+    handleSaveChanges,
+    loadSchemaAndRecords
+  ]);
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100 antialiased font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 antialiased font-sans">
       {/* Toast Banner */}
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-xl text-xs font-mono border transition-all animate-in slide-in-from-top-2 ${
             toast.type === 'success'
-              ? 'bg-emerald-950/90 border-emerald-800 text-emerald-200'
-              : 'bg-red-950/90 border-red-800 text-red-200'
+              ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+              : 'bg-red-50 dark:bg-red-950/90 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
           }`}
         >
           {toast.message}
@@ -253,10 +381,14 @@ export const App: React.FC = () => {
         onSaveChanges={handleSaveChanges}
         onDiscardChanges={handleDiscardChanges}
         savingChanges={savingChanges}
+        consoleOpen={consoleOpen}
+        onToggleConsole={() => setConsoleOpen(!consoleOpen)}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onOpenShortcuts={() => setShortcutsModalOpen(true)}
       />
 
       {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden pb-9">
         {activeTab === 'tables' ? (
           <>
             <Sidebar
@@ -264,6 +396,7 @@ export const App: React.FC = () => {
               selectedTable={selectedTable}
               onSelectTable={handleSelectTable}
               loading={loadingOverview}
+              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             />
 
             {schema && selectedTable ? (
@@ -278,6 +411,8 @@ export const App: React.FC = () => {
                 filters={filters}
                 loading={loadingRecords}
                 stagedChanges={stagedChanges}
+                showFilterBar={showFilterBar}
+                onToggleFilterBar={() => setShowFilterBar((prev) => !prev)}
                 onPageChange={setPage}
                 onPerPageChange={(newPerPage) => {
                   setPerPage(newPerPage);
@@ -297,13 +432,19 @@ export const App: React.FC = () => {
                 }
               />
             ) : (
-              <div className="flex-1 flex items-center justify-center text-zinc-500 font-mono text-xs">
+              <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-zinc-500 font-mono text-xs">
                 Select a table from the sidebar to inspect records
               </div>
             )}
           </>
         ) : (
-          <SqlRunner tables={tables} />
+          <SqlRunner
+            tables={tables}
+            onOpenConsole={(cmd) => {
+              setConsoleInitialCommand(cmd);
+              setConsoleOpen(true);
+            }}
+          />
         )}
       </div>
 
@@ -331,6 +472,60 @@ export const App: React.FC = () => {
           onSubmit={handleCreateRecord}
         />
       )}
+
+      {/* Fixed Bottom Rails Console Web Terminal */}
+      <RailsConsole
+        isOpen={consoleOpen}
+        onToggle={() => setConsoleOpen(!consoleOpen)}
+        initialCommand={consoleInitialCommand}
+        onClearInitialCommand={() => setConsoleInitialCommand(undefined)}
+      />
+
+      {/* Command Palette Modal (Ctrl+K or Cmd+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        tables={tables}
+        selectedTable={selectedTable}
+        onSelectTable={(tbl) => {
+          handleSelectTable(tbl);
+          setCommandPaletteOpen(false);
+        }}
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          setCommandPaletteOpen(false);
+        }}
+        onToggleConsole={() => {
+          setConsoleOpen((prev) => !prev);
+          setCommandPaletteOpen(false);
+        }}
+        onOpenInsertModal={() => {
+          setShowInsertModal(true);
+          setCommandPaletteOpen(false);
+        }}
+        onRefreshTable={() => {
+          if (selectedTable) loadSchemaAndRecords(selectedTable);
+          setCommandPaletteOpen(false);
+        }}
+        onToggleFilterBar={() => {
+          setShowFilterBar((prev) => !prev);
+          setCommandPaletteOpen(false);
+        }}
+        onSaveChanges={handleSaveChanges}
+        onDiscardChanges={handleDiscardChanges}
+        stagedChangesCount={stagedChanges.size}
+        onOpenShortcutsHelp={() => {
+          setShortcutsModalOpen(true);
+          setCommandPaletteOpen(false);
+        }}
+      />
+
+      {/* Shortcuts Cheat Sheet Modal */}
+      <ShortcutsModal
+        isOpen={shortcutsModalOpen}
+        onClose={() => setShortcutsModalOpen(false)}
+      />
     </div>
   );
 };

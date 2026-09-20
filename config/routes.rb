@@ -14,6 +14,9 @@ RailsStudio::Engine.routes.draw do
     delete "tables/:table_name/records/:id", to: "records#destroy"
     post "tables/:table_name/records/batch", to: "records#batch"
     post "query", to: "query#execute"
+    post "query/execute", to: "query#execute"
+    post "console/execute", to: "console#execute"
+    get "console/completions", to: "console#completions"
   end
 
   get "*path", to: "dashboard#index", constraints: ->(req) { !req.xhr? && req.format.html? }

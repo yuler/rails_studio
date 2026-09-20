@@ -3,11 +3,15 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './index.css';
 
+import { ThemeProvider } from './theme';
+
 const rootEl = document.getElementById('root');
 if (rootEl) {
   ReactDOM.createRoot(rootEl).render(
     <React.StrictMode>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </React.StrictMode>
   );
 }

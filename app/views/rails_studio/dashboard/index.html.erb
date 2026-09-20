@@ -1,10 +1,25 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rails Studio</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💎</text></svg>">
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('rails_studio_theme') || 'dark';
+        var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script>
     window.__RAILS_STUDIO_CONFIG__ = {
       basePath: "<%= @base_path %>",
@@ -18,7 +33,7 @@
   <link rel="stylesheet" href="<%= @base_path %>/assets/index.css" />
   <script type="module" src="<%= @base_path %>/assets/index.js"></script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 antialiased h-screen overflow-hidden select-none">
+<body class="bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 antialiased h-screen overflow-hidden select-none">
   <div id="root">
     <div class="flex items-center justify-center min-h-screen">
       <div class="text-center">

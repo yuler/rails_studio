@@ -135,8 +135,18 @@ module RailsStudio
 
       def dynamic_model_for(table_name)
         pks = SchemaService.primary_keys_for(table_name)
+        existing_model = SchemaService.find_model_for(table_name)
 
-        Class.new(ActiveRecord::Base) do
+        parent_class = if existing_model && existing_model < ActiveRecord::Base && existing_model.respond_to?(:connection_pool) && existing_model.connection_specification_name != ActiveRecord::Base.connection_specification_name
+                         Class.new(ActiveRecord::Base) do
+                           self.abstract_class = true
+                           establish_connection existing_model.connection_pool.db_config
+                         end
+                       else
+                         ActiveRecord::Base
+                       end
+
+        Class.new(parent_class) do
           self.table_name = table_name
           self.inheritance_column = nil # Disables STI
 

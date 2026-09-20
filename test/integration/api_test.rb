@@ -118,6 +118,56 @@ class ApiTest < ActionDispatch::IntegrationTest
     assert json["duration_ms"].is_a?(Numeric)
   end
 
+  test "POST /rails_studio/api/query detects ActiveRecord expressions and suggests Rails Console" do
+    post "/rails_studio/api/query", params: { sql: "User.all" }
+    assert_response :unprocessable_entity
+    json = JSON.parse(response.body)
+    assert_includes json["error"], "Rails Console"
+  end
+
+  test "POST /rails_studio/api/console/execute runs Ruby/ActiveRecord expressions" do
+    post "/rails_studio/api/console/execute", params: { command: "User.count" }
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert_equal "3", json["result"]
+    assert_equal "Integer", json["result_type"]
+    assert json["duration_ms"].is_a?(Numeric)
+
+    # Test ActiveRecord relation evaluation
+    post "/rails_studio/api/console/execute", params: { command: "User.all" }
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert_includes json["result"], "Alice"
+
+    # Test JSON content-type request (curl / fetch)
+    post "/rails_studio/api/console/execute", params: { command: "User.all" }, as: :json
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert_includes json["result"], "Alice"
+  end
+
+  test "POST /rails_studio/api/query and /query/execute work with as: :json" do
+    post "/rails_studio/api/query", params: { sql: "SELECT 1 AS num" }, as: :json
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert_equal ["num"], json["columns"]
+
+    post "/rails_studio/api/query/execute", params: { sql: "SELECT 2 AS num" }, as: :json
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert_equal ["num"], json["columns"]
+  end
+
+  test "GET /rails_studio/api/console/completions returns models and methods" do
+    get "/rails_studio/api/console/completions"
+    assert_response :success
+    json = JSON.parse(response.body)
+    assert json["models"].is_a?(Array)
+    model_names = json["models"].map { |m| m["name"] }
+    assert_includes model_names, "User"
+    assert json["common_methods"].include?("where")
+  end
+
   test "Access is forbidden when environment is production and not explicitly allowed" do
     # Temporarily set allow_in_production to false and simulate production
     controller = RailsStudio::ApplicationController.new

@@ -4,7 +4,9 @@ import {
   TableSchema,
   QueryRecordsResponse,
   FilterCondition,
-  QueryResult
+  QueryResult,
+  ConsoleExecuteResponse,
+  ConsoleCompletionsResponse
 } from './types';
 
 function getApiBase(): string {
@@ -120,4 +122,15 @@ export async function executeQuery(sql: string): Promise<QueryResult> {
     method: 'POST',
     body: JSON.stringify({ sql })
   });
+}
+
+export async function executeConsole(command: string): Promise<ConsoleExecuteResponse> {
+  return request('/console/execute', {
+    method: 'POST',
+    body: JSON.stringify({ command })
+  });
+}
+
+export async function fetchConsoleCompletions(): Promise<ConsoleCompletionsResponse> {
+  return request('/console/completions');
 }

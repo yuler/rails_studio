@@ -32,7 +32,8 @@ module RailsStudio
             database_name: current_database_name,
             rails_version: Rails.version,
             ruby_version: RUBY_VERSION,
-            read_only: RailsStudio.configuration.read_only?
+            read_only: RailsStudio.configuration.read_only?,
+            configured_databases: configured_databases
           },
           tables: tables,
           total_tables: tables.size
@@ -180,12 +181,26 @@ module RailsStudio
         end
       end
 
+      def configured_databases
+        ActiveRecord::Base.configurations.configs_for(env_name: Rails.env).map do |cfg|
+          {
+            name: cfg.name,
+            adapter: cfg.adapter,
+            database: cfg.database
+          }
+        end
+      rescue StandardError
+        []
+      end
+
       private
 
       def current_database_name
-        if connection.respond_to?(:current_database)
+        if connection.pool&.db_config&.database.present?
+          File.basename(connection.pool.db_config.database.to_s)
+        elsif connection.respond_to?(:current_database) && connection.current_database.present?
           connection.current_database
-        elsif connection.raw_connection.respond_to?(:filename)
+        elsif connection.raw_connection.respond_to?(:filename) && connection.raw_connection.filename.present?
           File.basename(connection.raw_connection.filename)
         else
           "database"

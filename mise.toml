@@ -1,2 +1,42 @@
 [tools]
 ruby = "3.4.7"
+node = "26.7.0"
+pnpm = "10.33.0"
+
+[tasks.build]
+description = "Compile frontend assets into public/assets/"
+run = "pnpm --dir frontend run build"
+
+[tasks."build:watch"]
+description = "Watch and compile frontend assets on changes"
+run = "pnpm --dir frontend run build --watch"
+
+[tasks."dev:frontend"]
+description = "Start Vite frontend dev server with HMR (http://localhost:5173)"
+run = "pnpm --dir frontend run dev"
+
+[tasks.dev]
+description = "Start Rails test server to run Rails Studio (http://localhost:3000/rails_studio)"
+run = "cd test/dummy && bin/rails server -p 3000"
+
+[tasks.preview]
+description = "Build frontend assets and launch Rails Studio preview"
+depends = ["build"]
+run = "cd test/dummy && bin/rails server -p 3000"
+
+[tasks.setup]
+description = "Install dependencies and setup test dummy database"
+run = """
+bundle install
+pnpm --dir frontend install
+cd test/dummy && bin/rails db:migrate db:seed
+"""
+
+[tasks.test]
+description = "Run automated test suite"
+run = "bin/rails test"
+
+[tasks.release]
+description = "Build frontend assets and publish the gem (tag + gem push)"
+depends = ["build"]
+run = "bundle exec rake release"

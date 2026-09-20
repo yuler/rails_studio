@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-@layer base {
-  * {
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Custom scrollbar styling for Studio */
 ::-webkit-scrollbar {
@@ -13,14 +9,26 @@
 }
 
 ::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.7);
+}
+
+.dark ::-webkit-scrollbar-track {
   background: rgba(24, 24, 27, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(82, 82, 91, 0.5);
+  background: rgba(203, 213, 225, 0.8);
   border-radius: 4px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 91, 0.5);
+}
+
 ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.9);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(113, 113, 122, 0.7);
 }
