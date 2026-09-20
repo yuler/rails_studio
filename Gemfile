@@ -8,7 +8,7 @@ gem "puma"
 gem "sqlite3"
 
 gem "propshaft"
-gem "json", "< 3.0"
+gem "json", "< 4.0"
 
 
 # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
