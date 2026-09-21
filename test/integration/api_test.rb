@@ -141,7 +141,7 @@ class ApiTest < ActionDispatch::IntegrationTest
     assert json["rows"].size > 0
     assert json["duration_ms"].is_a?(Numeric)
     assert_equal "categories", json["table_name"]
-    assert_equal ["id"], json["primary_keys"]
+    assert_equal [ "id" ], json["primary_keys"]
   end
 
   test "POST /rails_studio/api/query infers source table for single-table SELECT" do
@@ -150,7 +150,7 @@ class ApiTest < ActionDispatch::IntegrationTest
 
     json = JSON.parse(response.body)
     assert_equal "users", json["table_name"]
-    assert_equal ["id"], json["primary_keys"]
+    assert_equal [ "id" ], json["primary_keys"]
     assert json["columns"].include?("id")
   end
 
