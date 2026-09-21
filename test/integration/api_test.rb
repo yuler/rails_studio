@@ -33,6 +33,10 @@ class ApiTest < ActionDispatch::IntegrationTest
 
     get "/rails_studio/assets/nonexistent.js"
     assert_response :not_found
+
+    get "/rails_studio/assets/logo.svg"
+    assert_response :success
+    assert_includes response.media_type, "svg"
   end
 
   test "GET /rails_studio/api/overview returns tables and meta" do
