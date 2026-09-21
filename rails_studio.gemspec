@@ -15,7 +15,6 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"] = "https://github.com/yuler/rails_studio/blob/main/CHANGELOG.md"
   spec.metadata["bug_tracker_uri"] = "https://github.com/yuler/rails_studio/issues"
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
-  spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
     Dir["{app,config,db,lib,public}/**/*", "CHANGELOG.md", "MIT-LICENSE", "Rakefile", "README.md"]
