@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Rails Studio</title>
+  <rect width="512" height="512" rx="112" fill="#D30001"/>
+  <rect x="104" y="122" width="304" height="268" rx="28" fill="white"/>
+  <path d="M104 202H408M104 282H408M180 122V390M256 122V390M332 122V390" stroke="#D30001" stroke-width="18"/>
+  <path d="M151 352L224 232C239 208 273 208 288 232L361 352" stroke="#D30001" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M151 312H361M174 272H338" stroke="#D30001" stroke-width="18" stroke-linecap="round"/>
+</svg>
