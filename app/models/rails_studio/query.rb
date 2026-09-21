@@ -46,7 +46,7 @@ module RailsStudio
         affected_rows: affected_rows,
         message: message,
         duration_ms: duration_ms
-      }
+      }.merge(source_table_info)
     rescue ActiveRecord::ReadOnlyError => e
       raise RailsStudio::ReadOnlyError, "Write query attempted while in read-only mode: #{e.message}"
     end
@@ -79,6 +79,24 @@ module RailsStudio
           raise RailsStudio::ReadOnlyError, "Modifying operations inside #{first_word} queries are disabled in read-only mode."
         end
       end
+    end
+
+    def source_table_info
+      stripped = sql.gsub(%r{/\*.*?\*/}m, "").gsub(/--[^\n]*/, "")
+      first_word = stripped.split(/\s+/).first.to_s.upcase
+      return {} unless first_word == "SELECT"
+      return {} if stripped =~ /\b(JOIN|UNION|INTERSECT|EXCEPT)\b/i
+
+      froms = stripped.scan(/\bFROM\s+(?:["'`\[]?)([A-Za-z_][A-Za-z0-9_.]*)/i).flatten
+      return {} unless froms.size == 1
+
+      table_name = froms.first.to_s.split(".").last
+      return {} unless Table.exists?(table_name)
+
+      pks = Table.new(table_name).primary_keys
+      return {} if pks.empty?
+
+      { table_name: table_name, primary_keys: pks }
     end
 
     def format_message(result, affected_rows)

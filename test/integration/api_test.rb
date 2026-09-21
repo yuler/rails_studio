@@ -140,6 +140,28 @@ class ApiTest < ActionDispatch::IntegrationTest
     assert json["columns"].include?("name")
     assert json["rows"].size > 0
     assert json["duration_ms"].is_a?(Numeric)
+    assert_equal "categories", json["table_name"]
+    assert_equal ["id"], json["primary_keys"]
+  end
+
+  test "POST /rails_studio/api/query infers source table for single-table SELECT" do
+    post "/rails_studio/api/query", params: { sql: "SELECT * FROM users LIMIT 5" }
+    assert_response :success
+
+    json = JSON.parse(response.body)
+    assert_equal "users", json["table_name"]
+    assert_equal ["id"], json["primary_keys"]
+    assert json["columns"].include?("id")
+  end
+
+  test "POST /rails_studio/api/query omits source table for JOIN queries" do
+    post "/rails_studio/api/query", params: {
+      sql: "SELECT users.name FROM users JOIN articles ON articles.user_id = users.id"
+    }
+    assert_response :success
+
+    json = JSON.parse(response.body)
+    assert_nil json["table_name"]
   end
 
   test "POST /rails_studio/api/query detects ActiveRecord expressions and suggests Rails Console" do
