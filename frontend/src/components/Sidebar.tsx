@@ -8,6 +8,8 @@ interface SidebarProps {
   onSelectTable: (name: string) => void;
   loading: boolean;
   onOpenCommandPalette?: () => void;
+  navActive?: boolean;
+  onActivate?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -15,16 +17,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedTable,
   onSelectTable,
   loading,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  navActive = true,
+  onActivate
 }) => {
   const [search, setSearch] = useState('');
+  const [highlightedName, setHighlightedName] = useState<string | null>(selectedTable);
   const inputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const filteredTables = tables.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Shortcut '/' to focus filter tables input
+  const cursorIndex = (() => {
+    const idx = filteredTables.findIndex((t) => t.name === highlightedName);
+    return idx >= 0 ? idx : 0;
+  })();
+
+  useEffect(() => {
+    if (selectedTable) setHighlightedName(selectedTable);
+  }, [selectedTable]);
+
+  const moveHighlight = (delta: number) => {
+    if (filteredTables.length === 0) return;
+    const next = Math.min(filteredTables.length - 1, Math.max(0, cursorIndex + delta));
+    const name = filteredTables[next].name;
+    setHighlightedName(name);
+    itemRefs.current.get(name)?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const confirmHighlight = () => {
+    const tbl = filteredTables[cursorIndex];
+    if (tbl) onSelectTable(tbl.name);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -33,27 +60,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       if (!isTyping && e.key === '/' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
+        onActivate?.();
         inputRef.current?.focus();
         inputRef.current?.select();
+        return;
+      }
+
+      if (!navActive || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTyping && target !== inputRef.current) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveHighlight(1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveHighlight(-1);
+      } else if (e.key === 'Enter' && (target === inputRef.current || !isTyping)) {
+        e.preventDefault();
+        confirmHighlight();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable]);
 
   return (
-    <aside className="w-64 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none transition-colors">
+    <aside
+      className="w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none transition-colors"
+      onMouseDown={() => onActivate?.()}
+    >
       {/* Search Tables Input */}
-      <div className="p-3 border-b border-slate-200 dark:border-zinc-800">
-        <div className="relative flex items-center">
-          <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400 dark:text-zinc-500 pointer-events-none" />
+      <div className="h-[46px] px-2.5 border-b border-slate-200 dark:border-zinc-800 flex items-center">
+        <div className="relative flex items-center w-full">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
             placeholder="Filter tables..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => onActivate?.()}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault();
@@ -61,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 inputRef.current?.blur();
               }
             }}
-            className="w-full bg-white dark:bg-zinc-950/80 border border-slate-200 dark:border-zinc-800 rounded-md pl-8 pr-8 py-1.5 text-xs text-slate-900 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-slate-400 dark:focus:border-zinc-700 shadow-sm dark:shadow-none"
+            className="w-full h-8 bg-white dark:bg-zinc-950/80 border border-slate-200 dark:border-zinc-800 rounded-md pl-8 pr-8 text-xs text-slate-900 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-slate-400 dark:focus:border-zinc-700 shadow-sm dark:shadow-none"
           />
           <kbd
             className="absolute right-2 px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 shadow-xs pointer-events-none"
@@ -89,21 +136,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           filteredTables.map((tbl) => {
             const isSelected = selectedTable === tbl.name;
+            const isHighlighted = highlightedName === tbl.name;
             return (
               <button
                 key={tbl.name}
-                onClick={() => onSelectTable(tbl.name)}
+                ref={(el) => {
+                  if (el) itemRefs.current.set(tbl.name, el);
+                  else itemRefs.current.delete(tbl.name);
+                }}
+                onClick={() => {
+                  setHighlightedName(tbl.name);
+                  onSelectTable(tbl.name);
+                }}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono transition-all text-left group ${
                   isSelected
                     ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border border-slate-200 dark:border-zinc-700/60'
+                    : isHighlighted
+                    ? 'bg-slate-200/70 dark:bg-zinc-800/60 text-slate-900 dark:text-zinc-100 border border-slate-300 dark:border-zinc-600'
                     : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 hover:text-slate-900 dark:hover:text-zinc-200 border border-transparent'
-                }`}
+                } ${isHighlighted && navActive ? 'outline outline-1 -outline-offset-1 outline-slate-400 dark:outline-zinc-500' : ''}`}
               >
                 <div className="flex items-center space-x-2 truncate">
                   <Table
                     size={14}
                     className={`${
-                      isSelected ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-zinc-500 group-hover:text-slate-600 dark:group-hover:text-zinc-400'
+                      isSelected || isHighlighted ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-zinc-500 group-hover:text-slate-600 dark:group-hover:text-zinc-400'
                     }`}
                   />
                   <span className="truncate">{tbl.name}</span>

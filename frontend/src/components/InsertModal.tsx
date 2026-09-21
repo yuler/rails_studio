@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, PlusCircle, AlertCircle } from 'lucide-react';
 import { TableSchema, ColumnMeta } from '../types';
 import { ForeignKeySelect } from './ForeignKeySelect';
+import { BooleanToggle } from './BooleanToggle';
 
 interface InsertModalProps {
   schema: TableSchema;
@@ -126,17 +127,15 @@ export const InsertModal: React.FC<InsertModalProps> = ({ schema, onClose, onSub
 
     if (col.type === 'boolean') {
       return (
-        <label className="flex items-center space-x-2 cursor-pointer text-xs text-slate-700 dark:text-zinc-300">
-          <input
-            ref={isFirst ? firstInputRef : undefined}
-            autoFocus={isFirst}
-            type="checkbox"
-            checked={Boolean(formData[col.name])}
-            onChange={(e) => setFormData({ ...formData, [col.name]: e.target.checked })}
-            className="rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-red-500 focus:ring-0 w-4 h-4"
+        <div className="flex items-center gap-2">
+          <BooleanToggle
+            value={formData[col.name]}
+            onChange={(next) => setFormData({ ...formData, [col.name]: next })}
           />
-          <span>{formData[col.name] ? 'True' : 'False'}</span>
-        </label>
+          <span className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
+            {formData[col.name] ? 'true' : 'false'}
+          </span>
+        </div>
       );
     }
 

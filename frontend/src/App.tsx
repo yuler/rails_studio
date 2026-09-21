@@ -24,12 +24,16 @@ import {
   createRecord,
   deleteRecord
 } from './api';
+import { useTheme } from './theme';
 
 export const App: React.FC = () => {
+  const { toggleTheme } = useTheme();
   const [databaseInfo, setDatabaseInfo] = useState<DatabaseInfo | undefined>();
   const [tables, setTables] = useState<TableMeta[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'tables' | 'sql'>('tables');
+  const [sqlEditorFocusNonce, setSqlEditorFocusNonce] = useState(0);
+  const [navPane, setNavPane] = useState<'sidebar' | 'records'>('sidebar');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('rails_studio_sidebar_open');
@@ -270,29 +274,49 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       // 1. Cmd/Ctrl + K -> Toggle Command Palette
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
         return;
       }
 
       // 2. Cmd/Ctrl + B -> Toggle sidebar / brand column
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         toggleSidebar();
         return;
       }
 
       // 3. Cmd/Ctrl + ` -> Toggle Rails Console
-      if ((e.ctrlKey || e.metaKey) && (e.code === 'Backquote' || e.key === '`' || e.key === '~')) {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'Backquote' || e.key === '`' || e.key === '~')) {
         e.preventDefault();
         setConsoleOpen((prev) => !prev);
         return;
       }
 
-      // 3. Cmd/Ctrl + S -> Save pending changes (prevent browser save page dialog)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      // 4. Cmd/Ctrl + [ -> Switch to Tables
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === '[' || e.code === 'BracketLeft')) {
+        if (!commandPaletteOpen && !shortcutsModalOpen && !showInsertModal && !fkDrawer) {
+          e.preventDefault();
+          setActiveTab('tables');
+          return;
+        }
+      }
+
+      // 5. Cmd/Ctrl + ] -> Switch to SQL Runner
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === ']' || e.code === 'BracketRight')) {
+        if (!commandPaletteOpen && !shortcutsModalOpen && !showInsertModal && !fkDrawer) {
+          e.preventDefault();
+          setActiveTab('sql');
+          setSqlEditorFocusNonce((n) => n + 1);
+          return;
+        }
+      }
+
+      // Cmd/Ctrl + S: SQL runner stars its query; tables save pending cell edits
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
+        if (activeTab === 'sql') return;
         if (stagedChanges.size > 0 && !savingChanges) {
           handleSaveChanges();
         }
@@ -307,7 +331,7 @@ export const App: React.FC = () => {
         tag === 'select' ||
         target?.isContentEditable;
 
-      // 4. Cmd/Ctrl + C -> Discard pending changes (copy still works while typing)
+      // Cmd/Ctrl + C -> Discard pending changes (copy still works while typing)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
         if (!isTyping && stagedChanges.size > 0) {
           e.preventDefault();
@@ -316,7 +340,7 @@ export const App: React.FC = () => {
         return;
       }
 
-      // 5. Escape -> close topmost open overlay
+      // Escape -> close popups / blur inputs, then topmost overlay
       if (e.key === 'Escape') {
         if (commandPaletteOpen) {
           e.preventDefault();
@@ -326,6 +350,11 @@ export const App: React.FC = () => {
         if (shortcutsModalOpen) {
           e.preventDefault();
           setShortcutsModalOpen(false);
+          return;
+        }
+        if (isTyping) {
+          e.preventDefault();
+          target?.blur();
           return;
         }
         if (showInsertModal) {
@@ -345,7 +374,7 @@ export const App: React.FC = () => {
         }
       }
 
-      // 6. Single key shortcuts (only if NOT in an input/textarea/select/editable element and no modals open)
+      // Single key shortcuts (only if NOT in an input/textarea/select/editable element and no modals open)
       if (isTyping || commandPaletteOpen || shortcutsModalOpen || showInsertModal || fkDrawer) {
         return;
       }
@@ -357,16 +386,30 @@ export const App: React.FC = () => {
         return;
       }
 
-      // '1' / '2' -> Switch Tables / SQL Runner tabs
-      if (e.key === '1' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // 't' / 'T' -> Toggle light / dark theme
+      if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        setActiveTab('tables');
+        toggleTheme();
         return;
       }
-      if (e.key === '2' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        setActiveTab('sql');
-        return;
+
+      // Tab / ArrowLeft / ArrowRight -> switch sidebar vs table
+      if (activeTab === 'tables' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          setNavPane((prev) => (prev === 'sidebar' ? 'records' : 'sidebar'));
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setNavPane('sidebar');
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setNavPane('records');
+          return;
+        }
       }
 
       // 'n' or 'N' -> New Record
@@ -404,7 +447,8 @@ export const App: React.FC = () => {
     handleSaveChanges,
     handleDiscardChanges,
     loadSchemaAndRecords,
-    toggleSidebar
+    toggleSidebar,
+    toggleTheme
   ]);
 
   return (
@@ -412,7 +456,7 @@ export const App: React.FC = () => {
       {/* Toast Banner */}
       {toast && (
         <div
-          className={`fixed bottom-14 right-4 z-50 px-4 py-2 rounded-lg shadow-xl text-xs font-mono border transition-all animate-in slide-in-from-bottom-2 ${
+          className={`fixed bottom-24 right-4 z-50 px-4 py-2 rounded-lg shadow-xl text-xs font-mono border transition-all animate-in slide-in-from-bottom-2 ${
             toast.type === 'success'
               ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
               : 'bg-red-50 dark:bg-red-950/90 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
@@ -435,59 +479,64 @@ export const App: React.FC = () => {
 
       {/* Main Container — spacer below matches collapsed console height */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {activeTab === 'tables' ? (
-          <>
-            {sidebarOpen && (
-              <Sidebar
-                tables={tables}
-                selectedTable={selectedTable}
-                onSelectTable={handleSelectTable}
-                loading={loadingOverview}
-                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-              />
-            )}
+        {sidebarOpen && (
+          <Sidebar
+            tables={tables}
+            selectedTable={selectedTable}
+            onSelectTable={handleSelectTable}
+            loading={loadingOverview}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            navActive={activeTab === 'tables' && navPane === 'sidebar'}
+            onActivate={() => {
+              if (activeTab === 'tables') setNavPane('sidebar');
+            }}
+          />
+        )}
 
-            {schema && selectedTable ? (
-              <TableView
-                schema={schema}
-                records={records}
-                totalCount={totalCount}
-                page={page}
-                perPage={perPage}
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                filters={filters}
-                loading={loadingRecords}
-                stagedChanges={stagedChanges}
-                showFilterBar={showFilterBar}
-                onToggleFilterBar={() => setShowFilterBar((prev) => !prev)}
-                onPageChange={setPage}
-                onPerPageChange={(newPerPage) => {
-                  setPerPage(newPerPage);
-                  setPage(1);
-                }}
-                onSortChange={handleSortChange}
-                onFiltersChange={(newFilters) => {
-                  setFilters(newFilters);
-                  setPage(1);
-                }}
-                onRefresh={() => loadSchemaAndRecords(selectedTable)}
-                onOpenInsertModal={() => setShowInsertModal(true)}
-                onStageCellChange={handleStageCellChange}
-                onDeleteSelectedRows={handleDeleteSelectedRows}
-                onOpenForeignKey={(targetTable, targetId) =>
-                  setFkDrawer({ table: targetTable, id: targetId })
-                }
-              />
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-zinc-500 font-mono text-xs">
-                Select a table from the sidebar to inspect records
-              </div>
-            )}
-          </>
+        {activeTab === 'tables' ? (
+          schema && selectedTable ? (
+            <TableView
+              schema={schema}
+              records={records}
+              totalCount={totalCount}
+              page={page}
+              perPage={perPage}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              filters={filters}
+              loading={loadingRecords}
+              stagedChanges={stagedChanges}
+              showFilterBar={showFilterBar}
+              onToggleFilterBar={() => setShowFilterBar((prev) => !prev)}
+              navActive={navPane === 'records'}
+              onActivate={() => setNavPane('records')}
+              onPageChange={setPage}
+              onPerPageChange={(newPerPage) => {
+                setPerPage(newPerPage);
+                setPage(1);
+              }}
+              onSortChange={handleSortChange}
+              onFiltersChange={(newFilters) => {
+                setFilters(newFilters);
+                setPage(1);
+              }}
+              onRefresh={() => loadSchemaAndRecords(selectedTable)}
+              onOpenInsertModal={() => setShowInsertModal(true)}
+              onStageCellChange={handleStageCellChange}
+              onDeleteSelectedRows={handleDeleteSelectedRows}
+              onOpenForeignKey={(targetTable, targetId) =>
+                setFkDrawer({ table: targetTable, id: targetId })
+              }
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-zinc-500 font-mono text-xs">
+              Select a table from the sidebar to inspect records
+            </div>
+          )
         ) : (
           <SqlRunner
             tables={tables}
+            editorFocusNonce={sqlEditorFocusNonce}
             onOpenConsole={(cmd) => {
               setConsoleInitialCommand(cmd);
               setConsoleOpen(true);
@@ -523,7 +572,7 @@ export const App: React.FC = () => {
       )}
 
       {stagedChanges.size > 0 && (
-        <div className="fixed bottom-12 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2">
           <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-900/95 shadow-lg backdrop-blur px-2 py-1.5">
             <div className="flex items-center gap-1.5 px-2 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />

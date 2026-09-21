@@ -32,3 +32,55 @@
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(113, 113, 122, 0.7);
 }
+
+/* Circular theme wipe. Clip is CSS-driven so the first composited frame
+   is already cropped — WAAPI in transition.ready is one frame too late
+   and flashes the incoming snapshot. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  opacity: 1;
+}
+
+@keyframes rails-studio-theme-expand {
+  from { clip-path: circle(0px at var(--vt-x) var(--vt-y)); }
+  to { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); }
+}
+
+@keyframes rails-studio-theme-shrink {
+  from { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); }
+  to { clip-path: circle(0px at var(--vt-x) var(--vt-y)); }
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+  animation: none;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+  animation: rails-studio-theme-expand 450ms ease-in-out both;
+}
+
+html.theme-reveal-old::view-transition-old(root) {
+  z-index: 2147483646;
+  animation: rails-studio-theme-shrink 450ms ease-in-out both;
+}
+
+html.theme-reveal-old::view-transition-new(root) {
+  z-index: 0;
+  animation: none;
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
+::view-transition {
+  background-color: var(--vt-bg);
+}
+
+html.theme-transitioning,
+html.theme-transitioning * {
+  transition: none !important;
+}

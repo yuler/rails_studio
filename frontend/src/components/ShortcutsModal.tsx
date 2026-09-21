@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Keyboard, Command } from 'lucide-react';
+import { X, Keyboard } from 'lucide-react';
 
 interface ShortcutsModalProps {
   isOpen: boolean;
@@ -28,12 +28,17 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
       items: [
         { keys: [modKey, 'K'], description: 'Open Command Palette / Quick Search' },
         { keys: [modKey, 'B'], description: 'Toggle sidebar / brand column' },
-        { keys: ['1'], description: 'Switch to Tables browser' },
-        { keys: ['2'], description: 'Switch to SQL Runner' },
+        { keys: [modKey, '['], description: 'Switch to Tables browser' },
+        { keys: [modKey, ']'], description: 'Switch to SQL Runner and focus editor' },
         { keys: ['/'], description: 'Focus and filter tables in sidebar' },
+        { keys: ['↑', '↓'], description: 'Move highlight in the sidebar table list' },
+        { keys: ['Enter'], description: 'Open the highlighted sidebar table' },
+        { keys: ['Tab'], description: 'Switch focus between sidebar and table' },
+        { keys: ['←', '→'], description: 'Focus sidebar (←) or table (→)' },
         { keys: [modKey, '`'], description: 'Toggle Rails Console Web Terminal' },
         { keys: [modKey, 'S'], description: 'Save pending cell edits to database' },
         { keys: [modKey, 'C'], description: 'Discard pending cell edits' },
+        { keys: ['T'], description: 'Toggle light / dark theme' },
         { keys: ['?'], description: 'Open this Keyboard Shortcuts cheat sheet' },
         { keys: ['Esc'], description: 'Close any active modal, drawer, or search panel' }
       ]
@@ -41,6 +46,8 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
     {
       title: 'Table Data Browser',
       items: [
+        { keys: ['↑', '↓'], description: 'Move highlight on table rows (click table first)' },
+        { keys: ['Space'], description: 'Toggle checkbox on the focused row' },
         { keys: ['N'], description: 'Add a new row / record to current table' },
         { keys: ['D'], description: 'Delete selected rows' },
         { keys: ['R'], description: 'Refresh current table schema and records' },
@@ -52,19 +59,51 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
     {
       title: 'Rails Console & SQL Runner',
       items: [
-        { keys: [modKey, 'Enter'], description: 'Execute query or evaluate Ruby expression' },
-        { keys: [modKey, 'Shift', 'N'], description: 'New SQL query tab' },
-        { keys: [modKey, 'Shift', 'F'], description: 'Format / prettify SQL' },
-        { keys: [modKey, 'Shift', 'E'], description: 'Explain query plan' },
-        { keys: [modKey, 'Shift', 'H'], description: 'Toggle SQL query history' },
-        { keys: [modKey, 'Shift', 'M'], description: 'Toggle SQL templates' },
-        { keys: [modKey, '\\'], description: 'Toggle editor / results split layout' },
-        { keys: [modKey, 'Shift', 'Backspace'], description: 'Clear SQL editor' },
-        { keys: ['↑', '↓'], description: 'Navigate command history' },
-        { keys: ['Tab'], description: 'Accept autocomplete suggestion in console' }
+        { keys: ['Tab'], description: 'Switch between SQL editor and results' },
+        { keys: ['Esc'], description: 'Leave the SQL editor' },
+        { keys: [modKey, 'Enter'], description: 'Run query (also works while typing)' },
+        { keys: ['Ctrl', 'Alt', 'N'], description: 'New SQL query tab' },
+        { keys: ['Ctrl', 'Alt', 'F'], description: 'Format / prettify SQL' },
+        { keys: [modKey, 'S'], description: 'Save current SQL to Stars (name it for search)' },
+        { keys: ['Ctrl', 'Alt', 'S'], description: 'Open starred SQL queries' },
+        { keys: ['Ctrl', '\\'], description: 'Toggle editor / results split layout' },
+        { keys: ['Ctrl', 'Alt', 'X'], description: 'Clear SQL editor' },
+        { keys: ['↑', '↓'], description: 'Move highlight on result rows (or console history)' },
+        { keys: ['Space'], description: 'Toggle checkbox on the focused result row' },
+        { keys: ['Tab'], description: 'Console: accept autocomplete suggestion' }
       ]
     }
   ];
+
+  const renderGroup = (group: ShortcutGroup) => (
+    <div key={group.title} className="space-y-2">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+        {group.title}
+      </h4>
+      <div className="rounded-lg border border-slate-200 dark:border-zinc-800 divide-y divide-slate-100 dark:divide-zinc-800/60 overflow-hidden bg-slate-50/50 dark:bg-zinc-950/40">
+        {group.items.map((item, idx) => (
+          <div
+            key={idx}
+            className="flex items-center justify-between gap-3 px-3.5 py-2 text-xs"
+          >
+            <span className="text-slate-700 dark:text-zinc-300 font-sans min-w-0 pr-1">
+              {item.description}
+            </span>
+            <div className="flex items-center space-x-1 shrink-0">
+              {item.keys.map((k, ki) => (
+                <kbd
+                  key={ki}
+                  className="px-2 py-0.5 text-[11px] font-mono font-medium rounded border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 shadow-xs"
+                >
+                  {k}
+                </kbd>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -72,7 +111,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150"
+        className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -92,36 +131,14 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-5 overflow-y-auto max-h-[70vh]">
-          {shortcutGroups.map((group) => (
-            <div key={group.title} className="space-y-2">
-              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                {group.title}
-              </h4>
-              <div className="rounded-lg border border-slate-200 dark:border-zinc-800 divide-y divide-slate-100 dark:divide-zinc-800/60 overflow-hidden bg-slate-50/50 dark:bg-zinc-950/40">
-                {group.items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between px-3.5 py-2 text-xs"
-                  >
-                    <span className="text-slate-700 dark:text-zinc-300 font-sans">
-                      {item.description}
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      {item.keys.map((k, ki) => (
-                        <kbd
-                          key={ki}
-                          className="px-2 py-0.5 text-[11px] font-mono font-medium rounded border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 shadow-xs"
-                        >
-                          {k}
-                        </kbd>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="p-5 overflow-y-auto max-h-[75vh] grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+          <div className="space-y-2 min-w-0">
+            {renderGroup(shortcutGroups[0])}
+          </div>
+          <div className="space-y-5 min-w-0">
+            {renderGroup(shortcutGroups[1])}
+            {renderGroup(shortcutGroups[2])}
+          </div>
         </div>
 
         {/* Footer */}

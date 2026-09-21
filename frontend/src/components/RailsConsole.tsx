@@ -258,6 +258,7 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         setShowSuggestions(false);
         return;
       }
@@ -265,7 +266,8 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
     if (e.key === 'Escape') {
       e.preventDefault();
-      onToggle();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).blur();
       return;
     }
 

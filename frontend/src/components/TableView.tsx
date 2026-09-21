@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { TableSchema, ColumnMeta, FilterCondition, StagedChange } from '../types';
 import { ForeignKeySelect } from './ForeignKeySelect';
+import { BooleanToggle, coerceBoolean } from './BooleanToggle';
 
 function formatForDateTimeLocal(val: any): string {
   if (!val) return '';
@@ -95,6 +96,8 @@ interface TableViewProps {
   onOpenForeignKey: (targetTable: string, targetId: any) => void;
   showFilterBar?: boolean;
   onToggleFilterBar?: () => void;
+  navActive?: boolean;
+  onActivate?: () => void;
 }
 
 export const TableView: React.FC<TableViewProps> = ({
@@ -118,9 +121,12 @@ export const TableView: React.FC<TableViewProps> = ({
   onDeleteSelectedRows,
   onOpenForeignKey,
   showFilterBar: propShowFilterBar,
-  onToggleFilterBar
+  onToggleFilterBar,
+  navActive = false,
+  onActivate
 }) => {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<any>>(new Set());
+  const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [internalShowFilterBar, setInternalShowFilterBar] = useState(false);
   const showFilterBar = propShowFilterBar !== undefined ? propShowFilterBar : internalShowFilterBar;
   const toggleFilterBar = onToggleFilterBar || (() => setInternalShowFilterBar((prev) => !prev));
@@ -155,6 +161,7 @@ export const TableView: React.FC<TableViewProps> = ({
     setSelectedRowIds(new Set());
     setEditingCell(null);
     setFocusedCell(null);
+    setFocusedRowIndex(0);
   }, [schema.table_name, page]);
 
   // Focus and select input once when entering edit mode
@@ -173,28 +180,21 @@ export const TableView: React.FC<TableViewProps> = ({
     if (ok !== false) setSelectedRowIds(new Set());
   };
 
-  // Keyboard shortcut 'r' -> Refresh, 'd' -> Delete selected rows
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    if (!modalEditor) return;
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
-      const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
-      if (isTyping || editingCell || modalEditor || e.ctrlKey || e.metaKey || e.altKey) return;
-
-      if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        handleRefreshClick();
-        return;
-      }
-
-      if ((e.key === 'd' || e.key === 'D') && selectedRowIds.size > 0) {
-        e.preventDefault();
-        void handleDeleteSelected();
-      }
+      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || !!target?.isContentEditable;
+      if (typing) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setModalEditor(null);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingCell, modalEditor, onRefresh, selectedRowIds, onDeleteSelectedRows]);
+    window.addEventListener('keydown', onEscape, true);
+    return () => window.removeEventListener('keydown', onEscape, true);
+  }, [modalEditor]);
 
   const primaryKeyCol = schema.primary_keys[0] || 'id';
 
@@ -230,6 +230,59 @@ export const TableView: React.FC<TableViewProps> = ({
     setSelectedRowIds(next);
   };
 
+  useEffect(() => {
+    if (focusedRowIndex >= records.length) {
+      setFocusedRowIndex(Math.max(0, records.length - 1));
+    }
+  }, [records.length, focusedRowIndex]);
+
+  useEffect(() => {
+    if (!navActive) return;
+    const el = document.querySelector(`[data-row-focus="${focusedRowIndex}"]`);
+    if (el) (el as HTMLElement).scrollIntoView({ block: 'nearest' });
+  }, [focusedRowIndex, navActive]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
+      if (isTyping || editingCell || modalEditor || e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleRefreshClick();
+        return;
+      }
+
+      if ((e.key === 'd' || e.key === 'D') && selectedRowIds.size > 0) {
+        e.preventDefault();
+        void handleDeleteSelected();
+        return;
+      }
+
+      if (!navActive || records.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedRowIndex((i) => Math.min(records.length - 1, i + 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedRowIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        const row = records[focusedRowIndex];
+        if (row) handleToggleRow(getRowId(row));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navActive, records, focusedRowIndex, editingCell, modalEditor, selectedRowIds, onRefresh, onDeleteSelectedRows]);
+
   const getCellCurrentValue = (rowId: any, column: string, originalVal: any) => {
     const key = `${rowId}:${column}`;
     const staged = stagedChanges.get(key);
@@ -246,7 +299,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
     // If boolean, toggle directly or enter edit
     if (colMeta?.type === 'boolean') {
-      const nextBool = !val;
+      const nextBool = coerceBoolean(val) !== true;
       onStageCellChange(rowId, column, currentVal, nextBool);
       return;
     }
@@ -326,17 +379,6 @@ export const TableView: React.FC<TableViewProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault();
       handleStartEdit(rowId, column, currentVal);
-      return;
-    }
-
-    if (e.key === ' ' && !editingCell) {
-      const colMeta = schema.columns.find((c) => c.name === column);
-      if (colMeta?.type === 'boolean') {
-        e.preventDefault();
-        const val = getCellCurrentValue(rowId, column, currentVal);
-        onStageCellChange(rowId, column, currentVal, !val);
-      }
-      return;
     }
   };
 
@@ -428,9 +470,12 @@ export const TableView: React.FC<TableViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors">
+    <div
+      className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors"
+      onMouseDown={() => onActivate?.()}
+    >
       {/* Action Bar */}
-      <div className="p-2.5 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/30 flex items-center justify-between gap-3 text-xs">
+      <div className="h-[46px] px-2.5 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/30 flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center space-x-2">
           {/* Filter toggle */}
           <button
@@ -637,7 +682,14 @@ export const TableView: React.FC<TableViewProps> = ({
                         );
                         setDraftFilters(next);
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') applyFilters();
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.currentTarget.blur();
+                        }
+                      }}
                       className="flex-1 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded px-2.5 py-1.5 text-slate-800 dark:text-zinc-200 font-mono text-xs focus:outline-none focus:border-slate-400 dark:focus:border-zinc-700"
                     />
                   )}
@@ -666,7 +718,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
       {/* Spreadsheet Table Container */}
       <div className="flex-1 overflow-auto relative min-h-0">
-        <table className="w-full text-left font-mono text-xs border-collapse">
+        <table className="w-full text-left font-mono text-xs border-separate border-spacing-0">
           {/* Table Header */}
           <thead className="bg-slate-100/90 dark:bg-zinc-900 sticky top-0 border-b border-slate-200 dark:border-zinc-800 z-10 shadow-xs backdrop-blur">
             <tr>
@@ -738,20 +790,24 @@ export const TableView: React.FC<TableViewProps> = ({
               records.map((row, rowIdx) => {
                 const rowId = getRowId(row);
                 const isSelected = selectedRowIds.has(rowId);
+                const isRowFocused = navActive && focusedRowIndex === rowIdx;
 
                 return (
                   <tr
                     key={rowId ?? rowIdx}
+                    data-row-focus={rowIdx}
+                    onClick={() => setFocusedRowIndex(rowIdx)}
                     className={`transition-colors ${
                       isSelected
                         ? 'bg-slate-100/80 dark:bg-zinc-800/50'
                         : 'hover:bg-slate-50/80 dark:hover:bg-zinc-900/40'
-                    }`}
+                    } ${isRowFocused ? 'relative z-[1] shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]' : ''}`}
                   >
                     {/* Row Select */}
                     <td className="p-2.5 text-center border-r border-slate-100 dark:border-zinc-800/40">
                       <input
                         type="checkbox"
+                        tabIndex={-1}
                         checked={isSelected}
                         onChange={() => handleToggleRow(rowId)}
                         className="rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-red-500 focus:ring-0 cursor-pointer"
@@ -779,7 +835,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           key={col.name}
                           tabIndex={isAutoPk ? -1 : 0}
                           onClick={() => setFocusedCell({ rowId, column: col.name })}
-                          onDoubleClick={() => !isAutoPk && handleStartEdit(rowId, col.name, row[col.name])}
+                          onDoubleClick={() => !isAutoPk && col.type !== 'boolean' && handleStartEdit(rowId, col.name, row[col.name])}
                           onKeyDown={(e) => !isEditing && handleCellKeyDown(e, rowId, col.name, row[col.name])}
                           className={`${
                             isEditing ? 'p-0 relative' : 'p-2.5'
@@ -819,7 +875,11 @@ export const TableView: React.FC<TableViewProps> = ({
                                   onBlur={() => handleCommitEdit()}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                    }
                                     if (e.key === 'Tab') {
                                       e.preventDefault();
                                       handleCommitEdit(e.shiftKey ? -1 : 1);
@@ -843,7 +903,11 @@ export const TableView: React.FC<TableViewProps> = ({
                                   onBlur={() => handleCommitEdit()}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                    }
                                     if (e.key === 'Tab') {
                                       e.preventDefault();
                                       handleCommitEdit(e.shiftKey ? -1 : 1);
@@ -860,7 +924,11 @@ export const TableView: React.FC<TableViewProps> = ({
                                   onBlur={() => handleCommitEdit()}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                    }
                                     if (e.key === 'Tab') {
                                       e.preventDefault();
                                       handleCommitEdit(e.shiftKey ? -1 : 1);
@@ -877,7 +945,11 @@ export const TableView: React.FC<TableViewProps> = ({
                                   onBlur={() => handleCommitEdit()}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                    }
                                     if (e.key === 'Tab') {
                                       e.preventDefault();
                                       handleCommitEdit(e.shiftKey ? -1 : 1);
@@ -886,21 +958,14 @@ export const TableView: React.FC<TableViewProps> = ({
                                   className="w-full h-full bg-white dark:bg-zinc-900 border-2 border-blue-500 dark:border-blue-400 px-2 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none font-mono shadow-xs"
                                 />
                               ) : col.type === 'boolean' ? (
-                                <select
-                                  ref={inputEditRef as any}
-                                  value={String(editValue)}
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  onBlur={() => handleCommitEdit()}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                <BooleanToggle
+                                  value={editValue}
+                                  onChange={(next) => {
+                                    setEditValue(String(next));
+                                    onStageCellChange(rowId, col.name, row[col.name], next);
+                                    setEditingCell(null);
                                   }}
-                                  className="w-full h-full bg-white dark:bg-zinc-900 border-2 border-blue-500 dark:border-blue-400 px-2 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none font-mono shadow-xs"
-                                >
-                                  <option value="true">true</option>
-                                  <option value="false">false</option>
-                                  {col.null && <option value="">null</option>}
-                                </select>
+                                />
                               ) : (
                                 <input
                                   ref={inputEditRef as any}
@@ -911,7 +976,11 @@ export const TableView: React.FC<TableViewProps> = ({
                                   onBlur={() => handleCommitEdit()}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') handleCommitEdit();
-                                    if (e.key === 'Escape') handleCancelEdit();
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCancelEdit();
+                                    }
                                     if (e.key === 'Tab') {
                                       e.preventDefault();
                                       handleCommitEdit(e.shiftKey ? -1 : 1);
@@ -923,7 +992,25 @@ export const TableView: React.FC<TableViewProps> = ({
                             </div>
                           ) : (
                             <div className="flex items-center justify-between space-x-2">
-                              {col.foreign_key && displayVal !== null && displayVal !== undefined ? (
+                              {col.type === 'boolean' ? (
+                                <div className="flex items-center gap-2">
+                                  <BooleanToggle
+                                    value={displayVal}
+                                    onChange={(next) => onStageCellChange(rowId, col.name, row[col.name], next)}
+                                  />
+                                  <span className={`text-[10px] font-mono ${
+                                    coerceBoolean(displayVal) === true
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : displayVal === null || displayVal === undefined
+                                      ? 'text-slate-400 dark:text-zinc-600 italic'
+                                      : 'text-slate-400 dark:text-zinc-500'
+                                  }`}>
+                                    {displayVal === null || displayVal === undefined
+                                      ? 'null'
+                                      : coerceBoolean(displayVal) ? 'true' : 'false'}
+                                  </span>
+                                </div>
+                              ) : col.foreign_key && displayVal !== null && displayVal !== undefined ? (
                                 <div className="flex items-center space-x-1.5 truncate">
                                   <button
                                     onClick={(e) => {
@@ -939,22 +1026,6 @@ export const TableView: React.FC<TableViewProps> = ({
                                 </div>
                               ) : displayVal === null || displayVal === undefined ? (
                                 <span className="text-slate-400 dark:text-zinc-600 italic">null</span>
-                              ) : typeof displayVal === 'boolean' ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onStageCellChange(rowId, col.name, row[col.name], !displayVal);
-                                  }}
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition hover:scale-105 ${
-                                    displayVal
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                                      : 'bg-rose-100 text-rose-800 dark:bg-red-950/80 dark:text-red-300 border border-rose-300 dark:border-red-800'
-                                  }`}
-                                  title="Click to toggle boolean"
-                                >
-                                  {displayVal ? '✓ true' : '✗ false'}
-                                </button>
                               ) : typeof displayVal === 'object' ? (
                                 <span className="text-slate-600 dark:text-zinc-400 truncate">
                                   {JSON.stringify(displayVal)}
@@ -972,7 +1043,7 @@ export const TableView: React.FC<TableViewProps> = ({
                               )}
 
                               {/* Hover edit / expand icons */}
-                              {!isAutoPk && (
+                              {!isAutoPk && col.type !== 'boolean' && (
                                 <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 shrink-0">
                                   {(col.type === 'text' || col.type === 'json' || col.type === 'jsonb') && (
                                     <button
@@ -1090,6 +1161,13 @@ export const TableView: React.FC<TableViewProps> = ({
                 rows={8}
                 value={modalEditor.value}
                 onChange={(e) => setModalEditor({ ...modalEditor, value: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.blur();
+                  }
+                }}
                 placeholder="Enter value..."
                 className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-lg p-3 font-mono text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400"
               />

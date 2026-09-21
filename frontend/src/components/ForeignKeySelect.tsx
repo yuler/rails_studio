@@ -147,7 +147,11 @@ export const ForeignKeySelect: React.FC<ForeignKeySelectProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      setOpen(false);
+      e.stopPropagation();
+      if (open) {
+        setOpen(false);
+        return;
+      }
       onCancel?.();
     }
   };
@@ -163,7 +167,11 @@ export const ForeignKeySelect: React.FC<ForeignKeySelectProps> = ({
           onBlur={onCommit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onCommit?.();
-            if (e.key === 'Escape') onCancel?.();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancel?.();
+            }
           }}
           placeholder={`ID in ${targetTable}`}
           className="w-full bg-white dark:bg-zinc-900 border border-blue-500 dark:border-blue-400 rounded px-2 py-1 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none font-mono shadow-xs"
@@ -239,6 +247,11 @@ export const ForeignKeySelect: React.FC<ForeignKeySelectProps> = ({
                     const recId = filteredRecords[0].id ?? Object.values(filteredRecords[0])[0];
                     handleSelect(recId);
                   }
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOpen(false);
                 }
               }}
               className="flex-1 bg-transparent text-xs text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none font-mono"

@@ -165,6 +165,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       }
     }
 
+    const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+    const modKey = isMac ? '⌘' : 'Ctrl';
+
     // 4. Navigation & Views
     items.push({
       id: 'nav-tables',
@@ -172,7 +175,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Browse and edit database tables and associations',
       category: 'Navigation',
       icon: <Database size={15} className="text-blue-500" />,
-      shortcut: '1',
+      shortcut: `${modKey}+[`,
       onSelect: () => onSelectTab('tables')
     });
 
@@ -182,7 +185,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Write and run arbitrary SQL queries',
       category: 'Navigation',
       icon: <Code size={15} className="text-purple-500" />,
-      shortcut: '2',
+      shortcut: `${modKey}+]`,
       onSelect: () => onSelectTab('sql')
     });
 
@@ -215,6 +218,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Toggle color theme appearance',
       category: 'Appearance',
       icon: resolvedTheme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-600" />,
+      shortcut: 'T',
       onSelect: toggleTheme
     });
 
