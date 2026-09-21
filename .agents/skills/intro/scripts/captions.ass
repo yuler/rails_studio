@@ -1,0 +1,26 @@
+[Script Info]
+Title: Rails Studio intro
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Caption,Noto Sans,42,&H00FFFFFF,&H000000FF,&HCC0F0F0F,&H80000000,-1,0,0,0,100,100,0,0,3,0,0,2,80,80,56,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:03.50,Caption,,0,0,0,,Rails Studio
+Dialogue: 0,0:00:03.50,0:00:07.00,Caption,,0,0,0,,A visual database studio for your Rails app
+Dialogue: 0,0:00:07.00,0:00:11.30,Caption,,0,0,0,,Keyboard shortcuts — press ?
+Dialogue: 0,0:00:11.30,0:00:13.90,Caption,,0,0,0,,Browse tables like a spreadsheet
+Dialogue: 0,0:00:13.90,0:00:15.70,Caption,,0,0,0,,Sort columns without leaving the page
+Dialogue: 0,0:00:15.70,0:00:20.00,Caption,,0,0,0,,Filter records in place
+Dialogue: 0,0:00:20.00,0:00:26.00,Caption,,0,0,0,,Inline-edit cells — changes stay staged until you save
+Dialogue: 0,0:00:26.00,0:00:29.80,Caption,,0,0,0,,Follow associations from foreign-key badges
+Dialogue: 0,0:00:29.80,0:00:34.30,Caption,,0,0,0,,Run SQL with templates, timing, and CSV export
+Dialogue: 0,0:00:34.30,0:00:41.60,Caption,,0,0,0,,An embedded Rails console in the browser
+Dialogue: 0,0:00:41.60,0:00:46.20,Caption,,0,0,0,,Keyboard-first, with a command palette
+Dialogue: 0,0:00:46.20,0:00:51.00,Caption,,0,0,0,,Dark and light themes — mount it in one line

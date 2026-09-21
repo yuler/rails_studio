@@ -12,3 +12,8 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Intro
+.agents/skills/intro/scripts/node_modules/
+.agents/skills/intro/audio/
+assets/intro-record.mp4

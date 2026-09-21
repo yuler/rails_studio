@@ -18,6 +18,12 @@
   <a href="#-inspiration"><img src="https://img.shields.io/badge/inspired%20by-Prisma%20%26%20Drizzle%20Studio-6366f1.svg" alt="Inspiration"></a>
 </p>
 
+<p align="center">
+  <video src="assets/intro.mp4" poster="assets/intro-poster.jpg" width="800" autoplay loop muted playsinline controls>
+    <a href="assets/intro.mp4"><img src="assets/intro-poster.jpg" alt="Rails Studio intro: browse tables, filter, inline edit, SQL, and Rails console" width="800"></a>
+  </video>
+</p>
+
 ---
 
 Rails Studio is packaged as a **mountable Rails Engine** with zero dependencies required by the host application (pre-compiled SPA bundled with the gem — **no Node.js or NPM needed in your Rails app!**).

@@ -2,6 +2,7 @@
 ruby = "3.4.7"
 node = "26.7.0"
 pnpm = "10.33.0"
+uv = "latest"
 
 [tasks.setup]
 description = "Install dependencies, build assets, and setup test database"
@@ -31,3 +32,11 @@ run = "pnpm --dir frontend run build"
 [tasks.test]
 description = "Run automated test suite"
 run = "bin/rails test"
+
+[tasks."intro:record"]
+description = "Record the README intro (Omarchy fullscreen) → assets/intro-record.mp4. SKIP_RECORD=1 to dry-run."
+run = "bash .agents/skills/intro/scripts/record.sh"
+
+[tasks."intro:encode"]
+description = "Burn captions and narration onto assets/intro-record.mp4 → assets/intro.mp4"
+run = "bash .agents/skills/intro/scripts/encode.sh"
