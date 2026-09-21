@@ -5,7 +5,6 @@ import {
   Clock,
   Database,
   AlertCircle,
-  FileText,
   CheckCircle2,
   Terminal,
   Columns2,
@@ -14,7 +13,6 @@ import {
   Trash2,
   Copy,
   Check,
-  History,
   Search,
   Plus,
   X,
@@ -22,13 +20,16 @@ import {
   Columns,
   Sparkles,
   Zap,
-  ChevronDown
+  Star
 } from 'lucide-react';
-import { executeQuery, fetchConsoleCompletions } from '../api';
-import { QueryResult, TableMeta, ConsoleModelMeta } from '../types';
+import { executeQuery, fetchConsoleCompletions, fetchTableSchema } from '../api';
+import { QueryResult, TableMeta, ConsoleModelMeta, TableSchema } from '../types';
+import { SqlResultTable, SqlResultTableHandle } from './SqlResultTable';
+import { SqlStarsModal, StarredQuery } from './SqlStarsModal';
 
 interface SqlRunnerProps {
   tables: TableMeta[];
+  editorFocusNonce?: number;
   onOpenConsole?: (initialCommand?: string) => void;
 }
 
@@ -38,15 +39,6 @@ interface QueryTab {
   sql: string;
   result: QueryResult | null;
   error: string | null;
-}
-
-interface QueryHistoryItem {
-  id: string;
-  sql: string;
-  timestamp: string;
-  duration_ms?: number;
-  success: boolean;
-  rowsCount?: number;
 }
 
 interface SuggestionItem {
@@ -80,8 +72,12 @@ const SQL_FUNCTIONS = [
   { name: 'CONCAT()', insert: 'CONCAT()', desc: 'Concatenate strings' }
 ];
 
-export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) => {
+export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce = 0, onOpenConsole }) => {
   const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+  const kbdClass =
+    'hidden sm:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500';
+  const altChord = (key: string) => `Ctrl+Alt+${key}`;
+  const runChord = isMac ? 'Cmd+Enter' : 'Ctrl+Enter';
   const firstTableName = tables[0]?.name || 'users';
 
   // Tabs state (Drizzle Studio multi-tab query runner)
@@ -109,18 +105,26 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   const [loading, setLoading] = useState(false);
   const [copiedResult, setCopiedResult] = useState(false);
   const [resultFilter, setResultFilter] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-
-  // History state
-  const [history, setHistory] = useState<QueryHistoryItem[]>(() => {
+  const [showStars, setShowStars] = useState(false);
+  const [stars, setStars] = useState<StarredQuery[]>(() => {
     try {
-      const stored = localStorage.getItem('rails_studio_sql_history');
-      return stored ? JSON.parse(stored) : [];
+      const stored = localStorage.getItem('rails_studio_sql_stars');
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed)
+        ? parsed.map((item: Partial<StarredQuery>) => ({
+            id: String(item.id || Date.now()),
+            name: typeof item.name === 'string' ? item.name : '',
+            sql: String(item.sql || ''),
+            createdAt: Number(item.createdAt) || Date.now()
+          }))
+        : [];
     } catch {
       return [];
     }
   });
+  const [showSaveStar, setShowSaveStar] = useState(false);
+  const [starName, setStarName] = useState('');
+  const starNameRef = useRef<HTMLInputElement>(null);
 
   // Schema metadata for IntelliSense
   const [models, setModels] = useState<ConsoleModelMeta[]>([]);
@@ -141,6 +145,47 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const [editorFocused, setEditorFocused] = useState(false);
+  const [resultSchema, setResultSchema] = useState<TableSchema | null>(null);
+  const [pane, setPane] = useState<'editor' | 'results'>('editor');
+  const [resultSelectedCount, setResultSelectedCount] = useState(0);
+  const resultsPaneRef = useRef<HTMLDivElement>(null);
+  const resultTableRef = useRef<SqlResultTableHandle>(null);
+
+  const focusEditor = () => {
+    setPane('editor');
+    textareaRef.current?.focus();
+  };
+
+  const focusResults = () => {
+    setPane('results');
+    textareaRef.current?.blur();
+    resultsPaneRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!editorFocusNonce) return;
+    const id = requestAnimationFrame(() => focusEditor());
+    return () => cancelAnimationFrame(id);
+  }, [editorFocusNonce]);
+
+  useEffect(() => {
+    if (!result?.table_name) {
+      setResultSchema(null);
+      return;
+    }
+    let cancelled = false;
+    fetchTableSchema(result.table_name)
+      .then((schema) => {
+        if (!cancelled) setResultSchema(schema);
+      })
+      .catch(() => {
+        if (!cancelled) setResultSchema(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.table_name, activeTabId]);
 
   const setSql = (newSql: string) => {
     setTabs((prev) =>
@@ -203,51 +248,14 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
     try {
       const res = await executeQuery(queryToRun);
       setResultAndError(res, null);
-
-      // Add to history
-      const histItem: QueryHistoryItem = {
-        id: String(Date.now()),
-        sql: queryToRun,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        duration_ms: res.duration_ms,
-        success: true,
-        rowsCount: res.count
-      };
-      setHistory((prev) => {
-        const updated = [histItem, ...prev.slice(0, 49)];
-        try {
-          localStorage.setItem('rails_studio_sql_history', JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
+      setResultSelectedCount(0);
+      focusResults();
     } catch (err: any) {
       const errorMsg = err.message || 'Query execution failed';
       setResultAndError(null, errorMsg);
-
-      const histItem: QueryHistoryItem = {
-        id: String(Date.now()),
-        sql: queryToRun,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        success: false
-      };
-      setHistory((prev) => {
-        const updated = [histItem, ...prev.slice(0, 49)];
-        try {
-          localStorage.setItem('rails_studio_sql_history', JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
     } finally {
       setLoading(false);
     }
-  };
-
-  // Explain Query
-  const handleExplain = () => {
-    let cleanSql = sql.trim().replace(/^EXPLAIN (ANALYZE )?/i, '');
-    const explainSql = `EXPLAIN ${cleanSql}`;
-    setSql(explainSql);
-    handleRun(explainSql);
   };
 
   // Format / Prettify SQL
@@ -276,7 +284,58 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   const handleClear = () => {
     setSql('');
     setResultAndError(null, null);
-    textareaRef.current?.focus();
+    focusEditor();
+  };
+
+  const persistStars = (next: StarredQuery[]) => {
+    setStars(next);
+    try {
+      localStorage.setItem('rails_studio_sql_stars', JSON.stringify(next));
+    } catch {}
+  };
+
+  const defaultStarName = (value: string) => {
+    const line = value.trim().split('\n')[0].replace(/\s+/g, ' ');
+    return line.slice(0, 80);
+  };
+
+  const openSaveStar = () => {
+    const trimmed = sql.trim();
+    if (!trimmed) return;
+    const existing = stars.find((s) => s.sql.trim() === trimmed);
+    setStarName(existing?.name?.trim() || defaultStarName(trimmed));
+    setShowSaveStar(true);
+    requestAnimationFrame(() => {
+      starNameRef.current?.focus();
+      starNameRef.current?.select();
+    });
+  };
+
+  const handleSaveStar = () => {
+    const trimmed = sql.trim();
+    if (!trimmed) return;
+    const name = starName.trim() || defaultStarName(trimmed);
+    const existing = stars.find((s) => s.sql.trim() === trimmed);
+    if (existing) {
+      persistStars(
+        stars.map((s) => (s.id === existing.id ? { ...s, name, sql: trimmed } : s))
+      );
+    } else {
+      persistStars([
+        { id: String(Date.now()), name, sql: trimmed, createdAt: Date.now() },
+        ...stars
+      ]);
+    }
+    setShowSaveStar(false);
+  };
+
+  const handleRemoveStar = (id: string) => {
+    persistStars(stars.filter((s) => s.id !== id));
+  };
+
+  const handleApplyStar = (starSql: string) => {
+    setSql(starSql);
+    focusEditor();
   };
 
   // Autocomplete calculation
@@ -411,15 +470,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
 
   // Handle keydown in textarea
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // 1. Run Query: Cmd/Ctrl + Enter
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      setShowSuggestions(false);
-      handleRun();
-      return;
-    }
-
-    // 2. Suggestions navigation
+    // Suggestions navigation (Tab while popup is open accepts; otherwise Tab switches panes)
     if (showSuggestions && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -438,24 +489,18 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         setShowSuggestions(false);
         return;
       }
     }
 
-    // 3. Tab key indentation
-    if (e.key === 'Tab' && !e.shiftKey) {
+    if (e.key === 'Escape') {
       e.preventDefault();
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const nextSql = sql.substring(0, start) + '  ' + sql.substring(end);
-      setSql(nextSql);
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2;
-        }
-      }, 0);
+      e.stopPropagation();
+      e.currentTarget.blur();
+      setPane('editor');
+      return;
     }
   };
 
@@ -466,45 +511,86 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showSaveStar) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setShowSaveStar(false);
+        return;
+      }
+      if (showStars) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setShowStars(false);
+      }
+    };
+    window.addEventListener('keydown', onEscape, true);
+    return () => window.removeEventListener('keydown', onEscape, true);
+  }, [showStars, showSaveStar]);
 
-      if (e.key === '\\' && !e.shiftKey && !e.altKey) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (showStars || showSaveStar) return;
+
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (
+          e.target === textareaRef.current &&
+          showSuggestions &&
+          suggestions.length > 0
+        ) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (pane === 'editor' || e.target === textareaRef.current) {
+          focusResults();
+        } else {
+          focusEditor();
+        }
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        setShowSuggestions(false);
+        handleRun();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyS') {
+        e.preventDefault();
+        openSaveStar();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'Backslash') {
         e.preventDefault();
         handleToggleSplit();
         return;
       }
 
-      if (!e.shiftKey) return;
-
-      const key = e.key.toLowerCase();
-      if (key === 'n') {
-        e.preventDefault();
-        handleAddTab();
-      } else if (key === 'f') {
-        e.preventDefault();
-        handleFormat();
-      } else if (key === 'e') {
-        e.preventDefault();
-        handleExplain();
-      } else if (key === 'h') {
-        e.preventDefault();
-        setShowHistory((prev) => !prev);
-        setShowTemplates(false);
-      } else if (key === 'm') {
-        e.preventDefault();
-        setShowTemplates((prev) => !prev);
-        setShowHistory(false);
-      } else if (e.key === 'Backspace') {
-        e.preventDefault();
-        handleClear();
+      // Ctrl+Alt chords work while the SQL textarea is focused
+      if (e.ctrlKey && e.altKey && !e.metaKey) {
+        if (e.code === 'KeyF') {
+          e.preventDefault();
+          handleFormat();
+        } else if (e.code === 'KeyX') {
+          e.preventDefault();
+          handleClear();
+        } else if (e.code === 'KeyS') {
+          e.preventDefault();
+          setShowStars((prev) => !prev);
+        } else if (e.code === 'KeyN') {
+          e.preventDefault();
+          handleAddTab();
+        }
       }
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [sql, tabs.length, splitMode, loading]);
+  }, [pane, sql, showSuggestions, suggestions.length, splitMode, loading, tabs.length, showStars, showSaveStar, stars]);
 
   // Export CSV
   const exportCSV = () => {
@@ -552,16 +638,6 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   const lineCount = (sql.split('\n').length) || 1;
   const lines = Array.from({ length: Math.max(lineCount, 6) }, (_, i) => i + 1);
 
-  // Filtered rows
-  const filteredRows = React.useMemo(() => {
-    if (!result || !result.rows) return [];
-    if (!resultFilter.trim()) return result.rows;
-    const q = resultFilter.toLowerCase();
-    return result.rows.filter((row) =>
-      row.some((cell) => cell !== null && cell !== undefined && String(cell).toLowerCase().includes(q))
-    );
-  }, [result, resultFilter]);
-
   const isRailsExpressionError = Boolean(
     error && (error.includes('Rails Console') || error.includes('Active Record expression'))
   );
@@ -569,7 +645,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors">
       {/* 1. Drizzle Studio Style Header Bar */}
-      <div className="h-10 px-3 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0 gap-2">
+      <div className="h-[46px] px-2.5 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0 gap-2">
         {/* Left: Query Tabs */}
         <div className="flex items-center space-x-1 overflow-x-auto">
           {tabs.map((tab) => {
@@ -599,142 +675,88 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
           })}
 
           <button
+            type="button"
+            tabIndex={-1}
             onClick={handleAddTab}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-slate-200/60 dark:hover:bg-zinc-800 transition"
-            title={`New Query Tab (${isMac ? '⌘⇧N' : 'Ctrl+Shift+N'})`}
+            className="flex items-center gap-1 p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-slate-200/60 dark:hover:bg-zinc-800 transition"
+            title={`New Query Tab (${altChord('N')})`}
           >
             <Plus size={13} />
+            <kbd className={kbdClass}>{altChord('N')}</kbd>
           </button>
         </div>
 
         {/* Right: Quick Action Buttons & Split Toggle */}
         <div className="flex items-center space-x-1.5 shrink-0">
-          {/* Templates Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowTemplates(!showTemplates)}
-              className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition flex items-center space-x-1 shadow-xs"
-              title={`Quick SQL Templates (${isMac ? '⌘⇧M' : 'Ctrl+Shift+M'})`}
-            >
-              <FileText size={12} />
-              <span>Templates</span>
-              <kbd className="hidden lg:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500">
-                {isMac ? '⌘⇧M' : 'Ctrl+⇧M'}
-              </kbd>
-              <ChevronDown size={11} />
-            </button>
-
-            {showTemplates && (
-              <div
-                className="absolute right-0 top-8 w-64 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-xl py-1 z-30 font-mono text-xs animate-in fade-in zoom-in-95 duration-100"
-                onClick={() => setShowTemplates(false)}
-              >
-                <div className="px-3 py-1.5 text-[10px] uppercase font-semibold text-slate-400 dark:text-zinc-500 border-b border-slate-100 dark:border-zinc-800">
-                  Quick Query Templates
-                </div>
-                {tables.slice(0, 5).map((t) => (
-                  <button
-                    key={t.name}
-                    onClick={() => setSql(`SELECT * FROM ${t.name} LIMIT 25;`)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 truncate"
-                  >
-                    SELECT * FROM {t.name}
-                  </button>
-                ))}
-                {tables[0] && (
-                  <>
-                    <button
-                      onClick={() => setSql(`SELECT COUNT(*) AS total_count FROM ${tables[0].name};`)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300"
-                    >
-                      COUNT(*) in {tables[0].name}
-                    </button>
-                    <button
-                      onClick={() => setSql(`EXPLAIN SELECT * FROM ${tables[0].name} LIMIT 50;`)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300"
-                    >
-                      EXPLAIN query plan
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* History Button */}
           <button
-            onClick={() => setShowHistory(!showHistory)}
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowStars(true)}
             className={`px-2.5 py-1 text-xs font-mono rounded-md border transition flex items-center space-x-1 shadow-xs ${
-              showHistory
+              showStars
                 ? 'bg-slate-200 dark:bg-zinc-800 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100'
                 : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800'
             }`}
-            title={`Query Execution History (${isMac ? '⌘⇧H' : 'Ctrl+Shift+H'})`}
+            title={`Starred queries (${altChord('S')})`}
           >
-            <History size={12} />
-            <span className="hidden sm:inline">History</span>
-            <kbd className="hidden lg:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500">
-              {isMac ? '⌘⇧H' : 'Ctrl+⇧H'}
-            </kbd>
-            {history.length > 0 && (
-              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({history.length})</span>
+            <Star size={12} className={stars.length > 0 ? 'text-amber-500 fill-amber-500' : ''} />
+            <span className="hidden sm:inline">Stars</span>
+            <kbd className={kbdClass}>{altChord('S')}</kbd>
+            {stars.length > 0 && (
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({stars.length})</span>
             )}
           </button>
 
           {/* Format / Prettify SQL */}
           <button
+            type="button"
+            tabIndex={-1}
             onClick={handleFormat}
             disabled={!sql.trim()}
-            className="p-1.5 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs"
-            title={`Format / Prettify SQL (${isMac ? '⌘⇧F' : 'Ctrl+Shift+F'})`}
+            className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs flex items-center space-x-1"
+            title={`Format / Prettify SQL (${altChord('F')})`}
           >
             <Wand2 size={13} />
+            <span className="hidden sm:inline">Format</span>
+            <kbd className={kbdClass}>{altChord('F')}</kbd>
           </button>
 
-          {/* Clear Editor */}
           <button
+            type="button"
+            tabIndex={-1}
             onClick={handleClear}
             disabled={!sql.trim()}
-            className="p-1.5 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs"
-            title={`Clear SQL editor (${isMac ? '⌘⇧⌫' : 'Ctrl+Shift+Backspace'})`}
+            className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs flex items-center space-x-1"
+            title={`Clear SQL editor (${altChord('X')})`}
           >
             <Trash2 size={13} />
+            <span className="hidden sm:inline">Clear</span>
+            <kbd className={kbdClass}>{altChord('X')}</kbd>
           </button>
 
-          {/* Layout Direction Toggle (Drizzle Studio feature) */}
           <button
+            type="button"
+            tabIndex={-1}
             onClick={handleToggleSplit}
-            className="p-1.5 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition shadow-xs"
-            title={`Switch to ${splitMode === 'horizontal' ? 'Side-by-side (Vertical)' : 'Stacked (Horizontal)'} layout (${isMac ? '⌘\\' : 'Ctrl+\\'})`}
+            className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition shadow-xs flex items-center space-x-1"
+            title={`Switch to ${splitMode === 'horizontal' ? 'Side-by-side (Vertical)' : 'Stacked (Horizontal)'} layout (Ctrl+\\)`}
           >
             {splitMode === 'horizontal' ? <Columns2 size={13} /> : <Rows2 size={13} />}
+            <kbd className={kbdClass}>Ctrl+\</kbd>
           </button>
 
-          {/* Explain Button */}
           <button
-            onClick={handleExplain}
-            disabled={loading || !sql.trim()}
-            className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-300 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 font-medium transition flex items-center space-x-1 disabled:opacity-40 shadow-xs"
-            title={`Explain Query Execution Plan (${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'})`}
-          >
-            <Zap size={12} className="text-amber-500" />
-            <span className="hidden sm:inline">Explain</span>
-            <kbd className="hidden lg:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-300 dark:border-zinc-600 bg-white/50 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400">
-              {isMac ? '⌘⇧E' : 'Ctrl+⇧E'}
-            </kbd>
-          </button>
-
-          {/* Run Query Button */}
-          <button
+            type="button"
+            tabIndex={-1}
             onClick={() => handleRun()}
             disabled={loading || !sql.trim()}
-            className="flex items-center space-x-1.5 px-3.5 py-1 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium text-xs shadow-sm transition disabled:opacity-50"
-            title={`Run Query (${isMac ? '⌘↵' : 'Ctrl+↵'})`}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 font-medium text-xs shadow-sm transition disabled:opacity-50"
+            title={`Run Query (${runChord})`}
           >
             <Play size={12} className={loading ? 'animate-spin' : ''} />
             <span>{loading ? 'Running...' : 'Run'}</span>
-            <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-red-700 text-red-100 border border-red-500/40">
-              {isMac ? '⌘↵' : 'Ctrl+↵'}
+            <kbd className="hidden sm:inline-flex px-1 py-0.2 text-[9px] font-mono rounded bg-slate-800 dark:bg-zinc-200 text-slate-300 dark:text-zinc-700">
+              {runChord}
             </kbd>
           </button>
         </div>
@@ -745,6 +767,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
         {/* Editor Area */}
         <div
           ref={editorContainerRef}
+          onMouseDown={() => setPane('editor')}
           className={`flex flex-col relative overflow-hidden bg-white dark:bg-zinc-950 ${
             splitMode === 'vertical'
               ? 'w-1/2 border-r border-slate-200 dark:border-zinc-800'
@@ -752,7 +775,13 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
           }`}
         >
           {/* Textarea + Line Numbers Gutter */}
-          <div className="flex-1 flex overflow-hidden relative font-mono text-xs">
+          <div
+            className={`flex-1 flex overflow-hidden relative font-mono text-xs transition-shadow ${
+              pane === 'editor'
+                ? 'ring-1 ring-inset ring-slate-400 dark:ring-zinc-500'
+                : ''
+            }`}
+          >
             {/* Line numbers */}
             <div
               ref={lineNumbersRef}
@@ -770,6 +799,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
               ref={textareaRef}
               value={sql}
               onChange={handleEditorChange}
+              onFocus={() => {
+                setEditorFocused(true);
+                setPane('editor');
+              }}
+              onBlur={() => setEditorFocused(false)}
               onKeyDown={handleEditorKeyDown}
               onScroll={handleScroll}
               style={{ lineHeight: '20px' }}
@@ -791,7 +825,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
                     <Sparkles size={11} className="text-red-500" />
                     Suggestions
                   </span>
-                  <span>Tab ⇥ or ↵ to apply</span>
+                  <span>Tab or Enter to apply</span>
                 </div>
                 <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60">
                   {suggestions.map((item, idx) => (
@@ -832,9 +866,9 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
           {/* Status bar */}
           <div className="h-6 px-3 bg-slate-50 dark:bg-zinc-950 border-t border-slate-200 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 font-mono select-none">
             <div className="flex items-center space-x-2">
-              <span>Press {isMac ? '⌘↵' : 'Ctrl+↵'} to run</span>
+              <span>Tab switches editor / results</span>
               <span>•</span>
-              <span>Tab for suggestions</span>
+              <span>{isMac ? 'Cmd+S' : 'Ctrl+S'} to star</span>
             </div>
             <div>
               <span>{sql.length} chars</span>
@@ -845,62 +879,99 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
         </div>
 
         {/* Results Area */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 ${splitMode === 'vertical' ? 'w-1/2' : 'h-[58%]'}`}>
+        <div
+          ref={resultsPaneRef}
+          tabIndex={-1}
+          onMouseDown={() => setPane('results')}
+          className={`flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 outline-none ${
+            splitMode === 'vertical' ? 'w-1/2' : 'h-[58%]'
+          } ${pane === 'results' ? 'ring-1 ring-inset ring-slate-400 dark:ring-zinc-500' : ''}`}
+        >
           {/* Results Bar */}
           <div className="h-10 px-3 bg-slate-50/80 dark:bg-zinc-900/40 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between text-xs font-mono text-slate-600 dark:text-zinc-400 shrink-0 gap-2">
-            <div className="flex items-center space-x-3 truncate">
-              {result ? (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {result && result.rows && result.rows.length > 0 && (
                 <>
-                  <span className="flex items-center gap-1.5 text-slate-900 dark:text-zinc-100 font-semibold">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    <span>
-                      {result.message || `${result.count} ${result.count === 1 ? 'row' : 'rows'}`}
-                    </span>
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
-                    <Clock size={12} className="text-slate-400 dark:text-zinc-500" />
-                    <span>{result.duration_ms} ms</span>
-                  </span>
-                </>
-              ) : error ? (
-                <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-medium">
-                  <AlertCircle size={13} />
-                  <span>Execution failed</span>
-                </span>
-              ) : (
-                <span className="text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
-                  <Database size={13} />
-                  <span>Query Results</span>
-                </span>
-              )}
-            </div>
-
-            {/* Results Filter & Export Controls */}
-            {result && result.rows && result.rows.length > 0 && (
-              <div className="flex items-center space-x-2">
-                {/* In-results Search Filter */}
-                <div className="relative hidden md:block">
-                  <Search size={12} className="absolute left-2 top-2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Filter results..."
-                    value={resultFilter}
-                    onChange={(e) => setResultFilter(e.target.value)}
-                    className="w-36 lg:w-44 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md pl-6 pr-2 py-1 text-[11px] font-mono text-slate-800 dark:text-zinc-200 placeholder-slate-400 focus:outline-none focus:border-slate-400 dark:focus:border-zinc-700 shadow-xs"
-                  />
-                  {resultFilter && (
+                  <div className="relative shrink-0">
+                    <Search size={12} className="absolute left-2 top-2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Filter results..."
+                      value={resultFilter}
+                      onChange={(e) => setResultFilter(e.target.value)}
+                      onFocus={() => setPane('results')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      className="w-36 lg:w-44 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md pl-6 pr-2 py-1 text-[11px] font-mono text-slate-800 dark:text-zinc-200 placeholder-slate-400 focus:outline-none focus:border-slate-400 dark:focus:border-zinc-700 shadow-xs"
+                    />
+                    {resultFilter && (
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setResultFilter('')}
+                        className="absolute right-1.5 top-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  {resultSelectedCount > 0 && (
                     <button
-                      onClick={() => setResultFilter('')}
-                      className="absolute right-1.5 top-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => void resultTableRef.current?.deleteSelected()}
+                      className="px-2.5 py-1 rounded-md bg-rose-50 dark:bg-red-950/80 border border-rose-200 dark:border-red-800 text-rose-700 dark:text-red-300 hover:bg-rose-100 dark:hover:bg-red-900/80 transition flex items-center space-x-1.5 shrink-0"
+                      title="Delete selected rows (D)"
                     >
-                      <X size={11} />
+                      <Trash2 size={12} />
+                      <span>Delete ({resultSelectedCount})</span>
+                      <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-rose-100 dark:bg-red-900/80 border border-rose-200 dark:border-red-800 text-rose-600 dark:text-red-300">
+                        D
+                      </kbd>
                     </button>
                   )}
-                </div>
+                </>
+              )}
 
-                {/* Copy JSON */}
+              <div className="flex items-center space-x-3 truncate min-w-0">
+                {result ? (
+                  <>
+                    <span className="flex items-center gap-1.5 text-slate-900 dark:text-zinc-100 font-semibold">
+                      <CheckCircle2 size={13} className="text-emerald-500" />
+                      <span>
+                        {result.message || `${result.count} ${result.count === 1 ? 'row' : 'rows'}`}
+                      </span>
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
+                      <Clock size={12} className="text-slate-400 dark:text-zinc-500" />
+                      <span>{result.duration_ms} ms</span>
+                    </span>
+                  </>
+                ) : error ? (
+                  <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-medium">
+                    <AlertCircle size={13} />
+                    <span>Execution failed</span>
+                  </span>
+                ) : (
+                  <span className="text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
+                    <Database size={13} />
+                    <span>Query Results</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {result && result.rows && result.rows.length > 0 && (
+              <div className="flex items-center space-x-2 shrink-0">
                 <button
+                  type="button"
+                  tabIndex={-1}
                   onClick={handleCopyJSON}
                   className="flex items-center space-x-1 px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition text-[11px] shadow-xs"
                   title="Copy results as JSON"
@@ -909,8 +980,9 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
                   <span className="hidden sm:inline">{copiedResult ? 'Copied!' : 'JSON'}</span>
                 </button>
 
-                {/* Export CSV */}
                 <button
+                  type="button"
+                  tabIndex={-1}
                   onClick={exportCSV}
                   className="flex items-center space-x-1 px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition text-[11px] shadow-xs"
                   title="Export results to CSV"
@@ -949,57 +1021,22 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
                 </div>
               </div>
             ) : result && result.columns && result.columns.length > 0 ? (
-              <table className="w-full text-left font-mono text-xs border-collapse">
-                <thead className="bg-slate-100/90 dark:bg-zinc-900 sticky top-0 border-b border-slate-200 dark:border-zinc-800 z-10 backdrop-blur shadow-xs">
-                  <tr>
-                    <th className="p-2.5 w-12 text-slate-400 dark:text-zinc-500 text-[10px] uppercase font-medium border-r border-slate-200 dark:border-zinc-800/80 text-center">
-                      #
-                    </th>
-                    {result.columns.map((col) => (
-                      <th
-                        key={col}
-                        className="p-2.5 text-slate-700 dark:text-zinc-300 font-medium text-xs border-r border-slate-200 dark:border-zinc-800/80 whitespace-nowrap"
-                      >
-                        {col}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/40">
-                  {filteredRows.map((row, rowIdx) => (
-                    <tr key={rowIdx} className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition">
-                      <td className="p-2.5 text-slate-400 dark:text-zinc-600 text-center text-[10px] border-r border-slate-100 dark:border-zinc-800/40">
-                        {rowIdx + 1}
-                      </td>
-                      {row.map((cell, cellIdx) => (
-                        <td
-                          key={cellIdx}
-                          className="p-2.5 text-slate-800 dark:text-zinc-200 border-r border-slate-100 dark:border-zinc-800/40 whitespace-nowrap max-w-sm truncate select-text"
-                        >
-                          {cell === null ? (
-                            <span className="text-slate-400 dark:text-zinc-600 italic">null</span>
-                          ) : typeof cell === 'boolean' ? (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                              cell ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
-                            }`}>
-                              {String(cell)}
-                            </span>
-                          ) : (
-                            String(cell)
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  {filteredRows.length === 0 && resultFilter && (
-                    <tr>
-                      <td colSpan={result.columns.length + 1} className="p-8 text-center text-slate-400 dark:text-zinc-500 font-mono">
-                        No rows match filter "{resultFilter}"
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <SqlResultTable
+                ref={resultTableRef}
+                key={`${activeTabId}-${result.duration_ms}-${result.columns.join(',')}`}
+                columns={result.columns}
+                rows={result.rows}
+                tableName={result.table_name}
+                primaryKeys={result.primary_keys}
+                schema={resultSchema}
+                filter={resultFilter}
+                navActive={pane === 'results'}
+                onActivate={() => setPane('results')}
+                onSelectedChange={setResultSelectedCount}
+                onRowsChange={(nextRows) => {
+                  setResultAndError({ ...result, rows: nextRows, count: nextRows.length }, null);
+                }}
+              />
             ) : result && result.columns && result.columns.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-center font-mono space-y-2">
                 <CheckCircle2 size={32} className="text-emerald-500 animate-in zoom-in-75" />
@@ -1018,7 +1055,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
                 <div>
                   <p className="font-semibold text-slate-700 dark:text-zinc-300">Ready to execute SQL query</p>
                   <p className="text-[11px] mt-1 text-slate-400 dark:text-zinc-500">
-                    Write raw SQL above and press <span className="font-semibold">{isMac ? '⌘ Enter' : 'Ctrl+Enter'}</span> or click Run
+                    Write raw SQL above and press <span className="font-semibold">{runChord}</span> or click Run
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -1042,74 +1079,71 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, onOpenConsole }) =
         </div>
       </div>
 
-      {/* 3. Query History Drawer */}
-      {showHistory && (
+      <SqlStarsModal
+        isOpen={showStars}
+        stars={stars}
+        currentSql={sql}
+        onClose={() => setShowStars(false)}
+        onApply={handleApplyStar}
+        onStarCurrent={() => {
+          setShowStars(false);
+          openSaveStar();
+        }}
+        onRemove={handleRemoveStar}
+      />
+
+      {showSaveStar && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs animate-in fade-in"
-          onClick={() => setShowHistory(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setShowSaveStar(false)}
         >
           <div
-            className="w-full max-w-md bg-white dark:bg-zinc-900 h-full border-l border-slate-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-150"
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <History size={16} className="text-slate-700 dark:text-zinc-300" />
-                <h3 className="font-semibold text-sm text-slate-900 dark:text-zinc-100">Query History</h3>
-              </div>
-              <div className="flex items-center space-x-1">
-                {history.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setHistory([]);
-                      localStorage.removeItem('rails_studio_sql_history');
-                    }}
-                    className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
-                    title="Clear history"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowHistory(false)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-zinc-800 flex items-center gap-2">
+              <Star size={15} className="text-amber-500 fill-amber-500" />
+              <h3 className="font-semibold text-sm text-slate-900 dark:text-zinc-100">Save to Stars</h3>
             </div>
-
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60 p-2 space-y-1">
-              {history.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 dark:text-zinc-500 font-mono">
-                  No query history recorded yet
-                </div>
-              ) : (
-                history.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      setSql(item.sql);
-                      setShowHistory(false);
-                      textareaRef.current?.focus();
-                    }}
-                    className="p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800/60 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-zinc-700/60 transition space-y-1.5 group"
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 dark:text-zinc-500">
-                      <span className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span>{item.timestamp}</span>
-                      </span>
-                      {item.duration_ms !== undefined && (
-                        <span>{item.duration_ms} ms</span>
-                      )}
-                    </div>
-                    <pre className="font-mono text-xs text-slate-800 dark:text-zinc-200 whitespace-pre-wrap break-all line-clamp-3 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
-                      {item.sql}
-                    </pre>
-                  </div>
-                ))
-              )}
+            <div className="p-4 space-y-3">
+              <label className="block space-y-1.5">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400 dark:text-zinc-500">
+                  Name
+                </span>
+                <input
+                  ref={starNameRef}
+                  type="text"
+                  value={starName}
+                  onChange={(e) => setStarName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveStar();
+                    }
+                  }}
+                  placeholder="e.g. active users this week"
+                  className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-slate-400 dark:focus:border-zinc-500"
+                />
+              </label>
+              <pre className="max-h-32 overflow-auto rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950/80 p-2.5 font-mono text-[11px] text-slate-600 dark:text-zinc-400 whitespace-pre-wrap break-all">
+                {sql.trim()}
+              </pre>
+            </div>
+            <div className="px-4 py-3 bg-slate-50 dark:bg-zinc-950/80 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveStar(false)}
+                className="px-3 py-1.5 text-xs rounded-md border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveStar}
+                className="px-3 py-1.5 text-xs rounded-md bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 font-medium"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>

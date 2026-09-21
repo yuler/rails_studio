@@ -93,6 +93,8 @@ export interface QueryResult {
   message?: string;
   duration_ms: number;
   error?: string;
+  table_name?: string | null;
+  primary_keys?: string[];
 }
 
 export interface ConsoleQueryResult {
