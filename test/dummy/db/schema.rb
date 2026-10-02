@@ -11,7 +11,7 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[8.1].define(version: 2026_09_20_000001) do
-  create_table "article_tags", primary_key: ["article_id", "tag_name"], force: :cascade do |t|
+  create_table "article_tags", primary_key: [ "article_id", "tag_name" ], force: :cascade do |t|
     t.integer "article_id", null: false
     t.datetime "created_at", null: false
     t.string "tag_name", null: false
@@ -27,8 +27,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_000001) do
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
     t.integer "views_count", default: 0
-    t.index ["category_id"], name: "index_articles_on_category_id"
-    t.index ["user_id"], name: "index_articles_on_user_id"
+    t.index [ "category_id" ], name: "index_articles_on_category_id"
+    t.index [ "user_id" ], name: "index_articles_on_user_id"
   end
 
   create_table "categories", force: :cascade do |t|
@@ -45,7 +45,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_000001) do
     t.datetime "created_at", null: false
     t.integer "rating", default: 5
     t.datetime "updated_at", null: false
-    t.index ["article_id"], name: "index_comments_on_article_id"
+    t.index [ "article_id" ], name: "index_comments_on_article_id"
   end
 
   create_table "users", force: :cascade do |t|
