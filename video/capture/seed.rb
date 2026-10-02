@@ -15,24 +15,24 @@ if ActiveRecord::Base.connection.adapter_name == "SQLite"
 end
 
 people = [
-  ["Alice Johnson", "alice@rubyonrails.org", :admin, "Rails core contributor and database enthusiast."],
-  ["Bob Smith", "bob@example.com", :member, "Full stack developer building cool stuff."],
-  ["Chloe Martin", "chloe@basecamp.dev", :admin, "Ships Hotwire apps before breakfast."],
-  ["Daniel Kim", "daniel@kim.io", :member, "Postgres tuning and query plans."],
-  ["Elena Rossi", "elena@rossi.it", :member, "Design systems for developer tools."],
-  ["Farah Ahmed", "farah@shopify.dev", :member, "Scaling Active Record at checkout."],
-  ["George Lee", "george@lee.dev", :guest, "Learning Rails one generator at a time."],
-  ["Hana Sato", "hana@sato.jp", :member, "Ruby meetups organizer in Tokyo."],
-  ["Ivan Petrov", "ivan@petrov.dev", :member, "Background jobs and Solid Queue."],
-  ["Julia Gomez", "julia@gomez.mx", :admin, "Maintainer of three open source gems."],
-  ["Kofi Mensah", "kofi@mensah.gh", :member, "Building fintech on Rails 8."],
-  ["Lena Fischer", "lena@fischer.de", :guest, "Product manager who reads SQL."],
-  ["Marco Bianchi", "marco@bianchi.dev", :member, "Kamal deploys and tiny servers."],
-  ["Nora Hansen", "nora@hansen.no", :member, "Accessibility advocate."],
-  ["Omar Haddad", "omar@haddad.dev", :member, "Turbo Native mobile apps."],
-  ["Priya Patel", "priya@patel.in", :admin, "Multi-database architectures."],
-  ["Quinn Taylor", "quinn@taylor.dev", :guest, "Bootcamp grad, first Rails job."],
-  ["Rosa Silva", "rosa@silva.br", :member, "Testing culture and fast CI."]
+  [ "Alice Johnson", "alice@rubyonrails.org", :admin, "Rails core contributor and database enthusiast." ],
+  [ "Bob Smith", "bob@example.com", :member, "Full stack developer building cool stuff." ],
+  [ "Chloe Martin", "chloe@basecamp.dev", :admin, "Ships Hotwire apps before breakfast." ],
+  [ "Daniel Kim", "daniel@kim.io", :member, "Postgres tuning and query plans." ],
+  [ "Elena Rossi", "elena@rossi.it", :member, "Design systems for developer tools." ],
+  [ "Farah Ahmed", "farah@shopify.dev", :member, "Scaling Active Record at checkout." ],
+  [ "George Lee", "george@lee.dev", :guest, "Learning Rails one generator at a time." ],
+  [ "Hana Sato", "hana@sato.jp", :member, "Ruby meetups organizer in Tokyo." ],
+  [ "Ivan Petrov", "ivan@petrov.dev", :member, "Background jobs and Solid Queue." ],
+  [ "Julia Gomez", "julia@gomez.mx", :admin, "Maintainer of three open source gems." ],
+  [ "Kofi Mensah", "kofi@mensah.gh", :member, "Building fintech on Rails 8." ],
+  [ "Lena Fischer", "lena@fischer.de", :guest, "Product manager who reads SQL." ],
+  [ "Marco Bianchi", "marco@bianchi.dev", :member, "Kamal deploys and tiny servers." ],
+  [ "Nora Hansen", "nora@hansen.no", :member, "Accessibility advocate." ],
+  [ "Omar Haddad", "omar@haddad.dev", :member, "Turbo Native mobile apps." ],
+  [ "Priya Patel", "priya@patel.in", :admin, "Multi-database architectures." ],
+  [ "Quinn Taylor", "quinn@taylor.dev", :guest, "Bootcamp grad, first Rails job." ],
+  [ "Rosa Silva", "rosa@silva.br", :member, "Testing culture and fast CI." ]
 ]
 
 users = people.each_with_index.map do |(name, email, role, bio), i|
@@ -40,12 +40,12 @@ users = people.each_with_index.map do |(name, email, role, bio), i|
 end
 
 categories = [
-  ["Ruby on Rails", "ruby-on-rails"],
-  ["Databases", "databases"],
-  ["Hotwire", "hotwire"],
-  ["Design & UX", "design-ux"],
-  ["DevOps", "devops"],
-  ["Testing", "testing"]
+  [ "Ruby on Rails", "ruby-on-rails" ],
+  [ "Databases", "databases" ],
+  [ "Hotwire", "hotwire" ],
+  [ "Design & UX", "design-ux" ],
+  [ "DevOps", "devops" ],
+  [ "Testing", "testing" ]
 ].map { |name, slug| Category.create!(name:, slug:) }
 
 titles = [
@@ -95,7 +95,7 @@ articles = titles.each_with_index.map do |title, i|
     category: categories[i % categories.size],
     title:,
     content: "#{title}. Notes, code samples, and lessons learned from shipping it.",
-    views_count: [1420, 850, 320].fetch(i) { rng.rand(40..9800) },
+    views_count: [ 1420, 850, 320 ].fetch(i) { rng.rand(40..9800) },
     published_at: i % 9 == 8 ? nil : written_at + rng.rand(1..3).days
   )
 end
@@ -119,7 +119,7 @@ articles.each_with_index do |article, i|
       article:,
       author_name: authors[(i + j * 3) % authors.size],
       body: bodies[(i * 2 + j) % bodies.size],
-      rating: [5, 5, 4, 3, 5, 4][(i + j) % 6]
+      rating: [ 5, 5, 4, 3, 5, 4 ][(i + j) % 6]
     )
   end
 end
