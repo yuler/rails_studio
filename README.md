@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/e578c10e-dfb8-45f1-ae32-a596946f3d12" poster="assets/intro-poster.jpg" width="800" autoplay loop muted playsinline controls>
-    <a href="https://github.com/user-attachments/assets/e578c10e-dfb8-45f1-ae32-a596946f3d12"><img src="assets/intro-poster.jpg" alt="Rails Studio intro: browse tables, filter, inline edit, SQL, and Rails console" width="800"></a>
+  <video src="https://github.com/user-attachments/assets/54d23b60-dc22-449a-8ca2-32edf84f3cf9" poster="assets/intro-poster.jpg" width="800" autoplay loop muted playsinline controls>
+    <a href="https://github.com/user-attachments/assets/54d23b60-dc22-449a-8ca2-32edf84f3cf9"><img src="assets/intro-poster.jpg" alt="Rails Studio intro: browse tables, filter, inline edit, SQL, and Rails console" width="800"></a>
   </video>
 </p>
 
