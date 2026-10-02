@@ -14,6 +14,9 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { executeConsole, fetchConsoleCompletions } from '../api';
+import { shortcutLabel } from '../shortcuts';
+import { useDismiss, useShortcut } from '../useShortcut';
+import { ShortcutKeys } from './ShortcutKeys';
 import { ConsoleExecuteResponse, ConsoleModelMeta } from '../types';
 
 interface ConsoleHistoryItem {
@@ -66,7 +69,9 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+  useDismiss('console', onToggle, isOpen, 10);
+  useShortcut('clearConsole', () => setHistory([]), isOpen);
+  useShortcut('maximizeConsole', () => setIsExpanded((prev) => !prev), isOpen);
 
   // Load completions on mount
   useEffect(() => {
@@ -311,6 +316,7 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
   return (
     <div
+      data-shortcut-scope="console"
       className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-200 border-t ${
         isOpen
           ? isExpanded
@@ -330,7 +336,7 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
             Rails <span className="text-red-500 font-bold">Console</span>
           </span>
           <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono rounded border bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400">
-            {isOpen ? 'Esc' : (isMac ? '⌘`' : 'Ctrl+`')}
+            {isOpen ? shortcutLabel('dismiss') : shortcutLabel('toggleConsole')}
           </kbd>
         </div>
 
@@ -362,16 +368,17 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
               <button
                 onClick={() => setHistory([])}
-                className="p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition"
-                title="Clear console output"
+                className="p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition flex items-center gap-1.5"
+                title={`Clear console output (${shortcutLabel('clearConsole')})`}
               >
                 <Trash2 size={13} />
+                <ShortcutKeys id="clearConsole" className="hidden lg:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500" />
               </button>
 
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition"
-                title={isExpanded ? 'Restore size' : 'Maximize terminal'}
+                title={`${isExpanded ? 'Restore size' : 'Maximize terminal'} (${shortcutLabel('maximizeConsole')})`}
               >
                 {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
               </button>
@@ -381,7 +388,7 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
           <button
             onClick={onToggle}
             className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition"
-            title={isOpen ? 'Close console (Esc)' : `Open console (${isMac ? '⌘`' : 'Ctrl+`'})`}
+            title={isOpen ? `Close console (${shortcutLabel('dismiss')})` : `Open console (${shortcutLabel('toggleConsole')})`}
           >
             {isOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
           </button>

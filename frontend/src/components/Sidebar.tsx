@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Table, Search, Key, Link2, Layers } from 'lucide-react';
 import { TableMeta } from '../types';
+import { chordMatches, shortcutLabel } from '../shortcuts';
+import { isOverlayOpen } from '../useShortcut';
 
 interface SidebarProps {
   tables: TableMeta[];
   selectedTable: string | null;
   onSelectTable: (name: string) => void;
+  onQueryTable?: (name: string) => void;
   loading: boolean;
   onOpenCommandPalette?: () => void;
   navActive?: boolean;
@@ -16,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tables,
   selectedTable,
   onSelectTable,
+  onQueryTable,
   loading,
   onOpenCommandPalette,
   navActive = true,
@@ -47,9 +51,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     itemRefs.current.get(name)?.scrollIntoView({ block: 'nearest' });
   };
 
+  const activateTable = (name: string) => {
+    setHighlightedName(name);
+    onSelectTable(name);
+    onQueryTable?.(name);
+  };
+
   const confirmHighlight = () => {
     const tbl = filteredTables[cursorIndex];
-    if (tbl) onSelectTable(tbl.name);
+    if (!tbl) return;
+    activateTable(tbl.name);
   };
 
   useEffect(() => {
@@ -58,7 +69,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const tag = target?.tagName?.toLowerCase();
       const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
 
-      if (!isTyping && e.key === '/' && !e.ctrlKey && !e.metaKey) {
+      if (isOverlayOpen()) return;
+
+      if (!isTyping && chordMatches(e, { code: 'Slash' })) {
         e.preventDefault();
         onActivate?.();
         inputRef.current?.focus();
@@ -69,13 +82,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (!navActive || e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping && target !== inputRef.current) return;
 
-      if (e.key === 'ArrowDown') {
+      if (chordMatches(e, { code: 'ArrowDown' })) {
         e.preventDefault();
         moveHighlight(1);
-      } else if (e.key === 'ArrowUp') {
+      } else if (chordMatches(e, { code: 'ArrowUp' })) {
         e.preventDefault();
         moveHighlight(-1);
-      } else if (e.key === 'Enter' && (target === inputRef.current || !isTyping)) {
+      } else if (chordMatches(e, { code: 'Enter' }) && (target === inputRef.current || !isTyping)) {
         e.preventDefault();
         confirmHighlight();
       }
@@ -83,11 +96,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable]);
+  }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable, onQueryTable, onSelectTable]);
 
   return (
     <aside
-      className="w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none transition-colors"
+      className={`relative w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none ${
+        navActive ? 'shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]' : ''
+      }`}
+      data-shortcut-scope="sidebar"
       onMouseDown={() => onActivate?.()}
     >
       {/* Search Tables Input */}
@@ -112,9 +128,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
           <kbd
             className="absolute right-2 px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 shadow-xs pointer-events-none"
-            title="Press / to search tables"
+            title={`Press ${shortcutLabel('sidebarSearch')} to search tables`}
           >
-            /
+            {shortcutLabel('sidebarSearch')}
           </kbd>
         </div>
       </div>
@@ -144,18 +160,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (el) itemRefs.current.set(tbl.name, el);
                   else itemRefs.current.delete(tbl.name);
                 }}
-                onClick={() => {
-                  setHighlightedName(tbl.name);
-                  onSelectTable(tbl.name);
-                }}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono transition-all text-left group ${
+                onClick={() => activateTable(tbl.name)}
+                className={`relative w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono text-left group border ${
                   isSelected
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border border-slate-200 dark:border-zinc-700/60'
+                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border-slate-200 dark:border-zinc-700/60'
                     : isHighlighted
-                    ? 'bg-slate-200/70 dark:bg-zinc-800/60 text-slate-900 dark:text-zinc-100 border border-slate-300 dark:border-zinc-600'
-                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 hover:text-slate-900 dark:hover:text-zinc-200 border border-transparent'
-                } ${isHighlighted && navActive ? 'outline outline-1 -outline-offset-1 outline-slate-400 dark:outline-zinc-500' : ''}`}
+                    ? 'bg-slate-200/70 dark:bg-zinc-800/60 text-slate-900 dark:text-zinc-100 border-slate-300 dark:border-zinc-600'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 hover:text-slate-900 dark:hover:text-zinc-200 border-transparent'
+                }`}
               >
+                {isHighlighted && navActive && (
+                  <span className="pointer-events-none absolute inset-0 rounded-md shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]" />
+                )}
                 <div className="flex items-center space-x-2 truncate">
                   <Table
                     size={14}

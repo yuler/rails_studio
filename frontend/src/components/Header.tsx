@@ -2,7 +2,9 @@ import React from 'react';
 import { Database, Terminal, ShieldAlert, Sun, Moon, Search, Keyboard, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { DatabaseInfo } from '../types';
 import { useTheme } from '../theme';
+import { shortcutLabel } from '../shortcuts';
 import { Logo } from './Logo';
+import { ShortcutKeys } from './ShortcutKeys';
 
 export const SIDEBAR_WIDTH_CLASS = 'w-64';
 
@@ -26,10 +28,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShortcuts
 }) => {
   const { resolvedTheme, toggleTheme } = useTheme();
-  const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
-  const sidebarShortcut = isMac ? '⌘B' : 'Ctrl+B';
-  const tablesShortcut = isMac ? '⌘[' : 'Ctrl+[';
-  const sqlShortcut = isMac ? '⌘]' : 'Ctrl+]';
   const headerBtn =
     'h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-200/80 dark:hover:bg-zinc-800 transition-colors';
   const headerKbd =
@@ -81,17 +79,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onToggleSidebar}
             className={headerBtn}
-            title={`${sidebarOpen ? 'Collapse' : 'Expand'} sidebar (${sidebarShortcut})`}
+            title={`${sidebarOpen ? 'Collapse' : 'Expand'} sidebar (${shortcutLabel('toggleSidebar')})`}
             aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
-            <kbd className={headerKbd}>{sidebarShortcut}</kbd>
+            <ShortcutKeys id="toggleSidebar" className={headerKbd} />
           </button>
 
           <div className="h-8 flex items-center bg-slate-100/90 dark:bg-zinc-950/80 p-0.5 rounded-lg border border-slate-200 dark:border-zinc-800">
             <button
               onClick={() => setActiveTab('tables')}
-              title={`Tables (${tablesShortcut})`}
+              title={`Tables (${shortcutLabel('viewTables')})`}
               className={`h-full inline-flex items-center gap-1.5 px-2.5 text-xs font-medium rounded-md transition-all ${
                 activeTab === 'tables'
                   ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 shadow-sm'
@@ -100,11 +98,11 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database size={14} />
               <span>Tables</span>
-              <kbd className={headerKbd}>{tablesShortcut}</kbd>
+              <ShortcutKeys id="viewTables" className={headerKbd} />
             </button>
             <button
               onClick={() => setActiveTab('sql')}
-              title={`SQL Runner (${sqlShortcut})`}
+              title={`SQL Runner (${shortcutLabel('viewSql')})`}
               className={`h-full inline-flex items-center gap-1.5 px-2.5 text-xs font-medium rounded-md transition-all ${
                 activeTab === 'sql'
                   ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 shadow-sm'
@@ -113,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Terminal size={14} />
               <span>SQL Runner</span>
-              <kbd className={headerKbd}>{sqlShortcut}</kbd>
+              <ShortcutKeys id="viewSql" className={headerKbd} />
             </button>
           </div>
         </div>
@@ -123,13 +121,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenCommandPalette}
               className={`${headerBtn} w-40 justify-between px-2.5 text-xs`}
-              title={`Quick Search & Commands (${isMac ? '⌘K' : 'Ctrl+K'})`}
+              title={`Quick Search & Commands (${shortcutLabel('commandPalette')})`}
             >
               <span className="flex items-center gap-1.5 min-w-0">
                 <Search size={13} className="text-slate-400 dark:text-zinc-500 shrink-0" />
                 <span className="truncate">Search...</span>
               </span>
-              <kbd className={`${headerKbd} shrink-0`}>{isMac ? '⌘K' : 'Ctrl+K'}</kbd>
+              <ShortcutKeys id="commandPalette" className={`${headerKbd} shrink-0`} />
             </button>
           )}
 
@@ -137,19 +135,19 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenShortcuts}
               className={headerBtn}
-              title="Keyboard shortcuts (?)"
+              title={`Keyboard shortcuts (${shortcutLabel('showShortcuts')})`}
               aria-label="Keyboard shortcuts"
             >
               <Keyboard size={14} />
-              <kbd className={headerKbd}>?</kbd>
+              <ShortcutKeys id="showShortcuts" className={headerKbd} />
             </button>
           )}
 
           <button
             data-theme-toggle
-            onClick={toggleTheme}
+            onClick={(e) => toggleTheme(e.currentTarget)}
             className={headerBtn}
-            title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode (T)`}
+            title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode (${shortcutLabel('toggleTheme')})`}
             aria-label="Toggle theme"
           >
             {resolvedTheme === 'dark' ? (
@@ -157,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <Moon size={15} className="text-slate-600" />
             )}
-            <kbd className={headerKbd}>T</kbd>
+            <ShortcutKeys id="toggleTheme" className={headerKbd} />
           </button>
         </div>
       </div>

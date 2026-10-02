@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { TableMeta } from '../types';
 import { useTheme } from '../theme';
+import { shortcutLabel } from '../shortcuts';
+import { useDismiss, useOverlay } from '../useShortcut';
 
 export interface CommandItem {
   id: string;
@@ -72,6 +74,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme, toggleTheme } = useTheme();
+  useOverlay(isOpen);
+  useDismiss('command-palette', onClose, isOpen, 60);
 
   // Focus input on open
   useEffect(() => {
@@ -112,7 +116,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         subtitle: 'Insert a new record',
         category: 'Actions',
         icon: <Plus size={15} className="text-emerald-500" />,
-        shortcut: 'N',
+        shortcut: shortcutLabel('insertRow'),
         onSelect: () => {
           onSelectTab('tables');
           onOpenInsertModal();
@@ -125,7 +129,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         subtitle: 'Reload table schema and current page rows',
         category: 'Actions',
         icon: <RefreshCw size={15} className="text-blue-500" />,
-        shortcut: 'R',
+        shortcut: shortcutLabel('refreshTable'),
         onSelect: onRefreshTable
       });
 
@@ -135,7 +139,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         subtitle: 'Filter records by column values and conditions',
         category: 'Actions',
         icon: <Filter size={15} className="text-amber-500" />,
-        shortcut: 'F',
+        shortcut: shortcutLabel('toggleFilters'),
         onSelect: onToggleFilterBar
       });
     }
@@ -148,7 +152,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         subtitle: 'Commit cell edits to database',
         category: 'Actions',
         icon: <Save size={15} className="text-emerald-500" />,
-        shortcut: 'Ctrl+S',
+        shortcut: shortcutLabel('saveChanges'),
         onSelect: onSaveChanges
       });
 
@@ -159,14 +163,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           subtitle: 'Revert all unstaged cell edits',
           category: 'Actions',
           icon: <Undo2 size={15} className="text-rose-500" />,
-          shortcut: 'Ctrl+C',
+          shortcut: shortcutLabel('discardChanges'),
           onSelect: onDiscardChanges
         });
       }
     }
-
-    const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
-    const modKey = isMac ? '⌘' : 'Ctrl';
 
     // 4. Navigation & Views
     items.push({
@@ -175,7 +176,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Browse and edit database tables and associations',
       category: 'Navigation',
       icon: <Database size={15} className="text-blue-500" />,
-      shortcut: `${modKey}+[`,
+      shortcut: shortcutLabel('viewTables'),
       onSelect: () => onSelectTab('tables')
     });
 
@@ -185,7 +186,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Write and run arbitrary SQL queries',
       category: 'Navigation',
       icon: <Code size={15} className="text-purple-500" />,
-      shortcut: `${modKey}+]`,
+      shortcut: shortcutLabel('viewSql'),
       onSelect: () => onSelectTab('sql')
     });
 
@@ -195,7 +196,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Evaluate ActiveRecord & Ruby expressions in real-time',
       category: 'Navigation',
       icon: <Terminal size={15} className="text-red-500" />,
-      shortcut: 'Ctrl+`',
+      shortcut: shortcutLabel('toggleConsole'),
       onSelect: onToggleConsole
     });
 
@@ -206,7 +207,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         subtitle: 'Show or hide the left brand column and table list',
         category: 'Navigation',
         icon: <PanelLeft size={15} className="text-slate-500" />,
-        shortcut: 'Ctrl+B',
+        shortcut: shortcutLabel('toggleSidebar'),
         onSelect: onToggleSidebar
       });
     }
@@ -218,7 +219,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'Toggle color theme appearance',
       category: 'Appearance',
       icon: resolvedTheme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-600" />,
-      shortcut: 'T',
+      shortcut: shortcutLabel('toggleTheme'),
       onSelect: toggleTheme
     });
 
@@ -229,7 +230,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       subtitle: 'View all keyboard shortcuts and keybindings',
       category: 'Help',
       icon: <Keyboard size={15} className="text-slate-500 dark:text-zinc-400" />,
-      shortcut: '?',
+      shortcut: shortcutLabel('showShortcuts'),
       onSelect: onOpenShortcutsHelp
     });
 
@@ -426,12 +427,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         <div className="px-4 py-2 bg-slate-50 dark:bg-zinc-950/80 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↑</kbd>
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↓</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Up</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Down</kbd>
               navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↵</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Enter</kbd>
               select
             </span>
             <span className="flex items-center gap-1">

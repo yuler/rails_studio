@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Star, Trash2, X } from 'lucide-react';
+import { shortcutLabel } from '../shortcuts';
 
 export interface StarredQuery {
   id: string;
@@ -11,28 +12,22 @@ export interface StarredQuery {
 interface SqlStarsModalProps {
   isOpen: boolean;
   stars: StarredQuery[];
-  currentSql: string;
   onClose: () => void;
   onApply: (sql: string) => void;
-  onStarCurrent: () => void;
   onRemove: (id: string) => void;
 }
 
 export const SqlStarsModal: React.FC<SqlStarsModalProps> = ({
   isOpen,
   stars,
-  currentSql,
   onClose,
   onApply,
-  onStarCurrent,
   onRemove
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const currentTrimmed = currentSql.trim();
-  const currentStarred = stars.some((s) => s.sql.trim() === currentTrimmed);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -117,21 +112,6 @@ export const SqlStarsModal: React.FC<SqlStarsModalProps> = ({
             placeholder="Search stars by name or SQL..."
             className="flex-1 bg-transparent text-sm text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 outline-none"
           />
-          {currentTrimmed && (
-            <button
-              type="button"
-              onClick={onStarCurrent}
-              className={`shrink-0 px-2 py-1 text-[11px] font-mono rounded-md border transition flex items-center gap-1 ${
-                currentStarred
-                  ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
-                  : 'border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700'
-              }`}
-              title={currentStarred ? 'Rename starred query' : 'Star current query'}
-            >
-              <Star size={12} className={currentStarred ? 'fill-current' : ''} />
-              <span>{currentStarred ? 'Edit star' : 'Star current'}</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={onClose}
@@ -146,7 +126,7 @@ export const SqlStarsModal: React.FC<SqlStarsModalProps> = ({
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-slate-400 dark:text-zinc-500 text-xs font-mono">
               {stars.length === 0
-                ? 'No starred queries yet. Press Ctrl+S in the editor to save one with a name.'
+                ? `No starred queries yet. Press ${shortcutLabel('saveStar')} in the editor to save one with a name.`
                 : `No stars match "${query}"`}
             </div>
           ) : (

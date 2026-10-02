@@ -25,6 +25,9 @@ import {
 import { TableSchema, ColumnMeta, FilterCondition, StagedChange } from '../types';
 import { ForeignKeySelect } from './ForeignKeySelect';
 import { BooleanToggle, coerceBoolean } from './BooleanToggle';
+import { chordMatches, shortcutLabel } from '../shortcuts';
+import { isOverlayOpen, useOverlay, useShortcut } from '../useShortcut';
+import { ShortcutKeys } from './ShortcutKeys';
 
 function formatForDateTimeLocal(val: any): string {
   if (!val) return '';
@@ -247,33 +250,21 @@ export const TableView: React.FC<TableViewProps> = ({
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
-      if (isTyping || editingCell || modalEditor || e.ctrlKey || e.metaKey || e.altKey) return;
-
-      if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        handleRefreshClick();
-        return;
-      }
-
-      if ((e.key === 'd' || e.key === 'D') && selectedRowIds.size > 0) {
-        e.preventDefault();
-        void handleDeleteSelected();
-        return;
-      }
-
+      if (isTyping || editingCell || modalEditor || isOverlayOpen()) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (!navActive || records.length === 0) return;
 
-      if (e.key === 'ArrowDown') {
+      if (chordMatches(e, { code: 'ArrowDown' })) {
         e.preventDefault();
         setFocusedRowIndex((i) => Math.min(records.length - 1, i + 1));
         return;
       }
-      if (e.key === 'ArrowUp') {
+      if (chordMatches(e, { code: 'ArrowUp' })) {
         e.preventDefault();
         setFocusedRowIndex((i) => Math.max(0, i - 1));
         return;
       }
-      if (e.key === ' ' || e.code === 'Space') {
+      if (chordMatches(e, { code: 'Space' })) {
         e.preventDefault();
         const row = records[focusedRowIndex];
         if (row) handleToggleRow(getRowId(row));
@@ -447,6 +438,19 @@ export const TableView: React.FC<TableViewProps> = ({
 
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
+  useOverlay(Boolean(modalEditor));
+  useShortcut('insertRow', onOpenInsertModal);
+  useShortcut('deleteRows', () => void handleDeleteSelected(), selectedRowIds.size > 0);
+  useShortcut('refreshTable', handleRefreshClick);
+  useShortcut('toggleFilters', toggleFilterBar);
+  useShortcut('applyFilters', applyFilters, {
+    enabled: showFilterBar,
+    accept: (event) => event.target instanceof Element && Boolean(event.target.closest('[data-filter-bar]'))
+  });
+  useShortcut('clearFilters', clearAllFilters, filters.length > 0 || draftFilters.length > 0);
+  useShortcut('prevPage', () => onPageChange(page - 1), page > 1);
+  useShortcut('nextPage', () => onPageChange(page + 1), page < totalPages);
+
   const renderColumnIcon = (col: ColumnMeta) => {
     if (col.primary) return <Key size={12} className="text-amber-500 dark:text-amber-400 shrink-0" />;
     if (col.foreign_key) return <Link2 size={12} className="text-blue-500 dark:text-blue-400 shrink-0" />;
@@ -472,6 +476,7 @@ export const TableView: React.FC<TableViewProps> = ({
   return (
     <div
       className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors"
+      data-shortcut-scope="tables"
       onMouseDown={() => onActivate?.()}
     >
       {/* Action Bar */}
@@ -485,7 +490,7 @@ export const TableView: React.FC<TableViewProps> = ({
                 ? 'bg-slate-200/90 dark:bg-zinc-800 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 font-medium'
                 : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 shadow-xs'
             }`}
-            title="Toggle filters (F)"
+            title={`Toggle filters (${shortcutLabel('toggleFilters')})`}
           >
             <Filter size={13} />
             <span>Filter</span>
@@ -494,9 +499,7 @@ export const TableView: React.FC<TableViewProps> = ({
                 {filters.length}
               </span>
             )}
-            <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500">
-              F
-            </kbd>
+            <ShortcutKeys id="toggleFilters" className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500" />
           </button>
 
           {/* Refresh button with dedicated spin animation and shortcut badge */}
@@ -508,7 +511,7 @@ export const TableView: React.FC<TableViewProps> = ({
                 ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400'
                 : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800'
             }`}
-            title="Refresh records (R)"
+            title={`Refresh records (${shortcutLabel('refreshTable')})`}
           >
             <RefreshCw
               size={13}
@@ -517,9 +520,7 @@ export const TableView: React.FC<TableViewProps> = ({
               }`}
             />
             <span className="hidden sm:inline">{loading || isSpinning ? 'Refreshing...' : 'Refresh'}</span>
-            <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500">
-              R
-            </kbd>
+            <ShortcutKeys id="refreshTable" className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500" />
           </button>
 
           {/* Inline Edit hint */}
@@ -533,13 +534,11 @@ export const TableView: React.FC<TableViewProps> = ({
             <button
               onClick={() => void handleDeleteSelected()}
               className="px-3 py-1.5 rounded-md bg-rose-50 dark:bg-red-950/80 border border-rose-200 dark:border-red-800 text-rose-700 dark:text-red-300 hover:bg-rose-100 dark:hover:bg-red-900/80 transition flex items-center space-x-1.5"
-              title="Delete selected rows (D)"
+              title={`Delete selected rows (${shortcutLabel('deleteRows')})`}
             >
               <Trash2 size={13} />
               <span>Delete ({selectedRowIds.size})</span>
-              <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-rose-100 dark:bg-red-900/80 border border-rose-200 dark:border-red-800 text-rose-600 dark:text-red-300">
-                D
-              </kbd>
+              <ShortcutKeys id="deleteRows" className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-rose-100 dark:bg-red-900/80 border border-rose-200 dark:border-red-800 text-rose-600 dark:text-red-300" />
             </button>
           )}
 
@@ -549,7 +548,7 @@ export const TableView: React.FC<TableViewProps> = ({
           >
             <Plus size={14} />
             <span>Add Row</span>
-            <kbd className="hidden sm:inline-flex px-1 py-0.2 text-[9px] font-mono rounded bg-slate-800 dark:bg-zinc-200 text-slate-300 dark:text-zinc-700">N</kbd>
+            <ShortcutKeys id="insertRow" className="hidden sm:inline-flex px-1 py-0.2 text-[9px] font-mono rounded bg-slate-800 dark:bg-zinc-200 text-slate-300 dark:text-zinc-700" />
           </button>
         </div>
       </div>
@@ -578,16 +577,18 @@ export const TableView: React.FC<TableViewProps> = ({
           ))}
           <button
             onClick={clearAllFilters}
-            className="text-[11px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline shrink-0 pl-1"
+            className="text-[11px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline shrink-0 pl-1 inline-flex items-center gap-1"
+            title={`Clear all filters (${shortcutLabel('clearFilters')})`}
           >
             Clear all
+            <ShortcutKeys id="clearFilters" className="px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 text-slate-400" />
           </button>
         </div>
       )}
 
       {/* Filter Editor Panel (Item 8: modern card layout) */}
       {showFilterBar && (
-        <div className="p-3.5 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/90 dark:bg-zinc-900/60 flex flex-col space-y-3 animate-in slide-in-from-top-2 duration-150">
+        <div data-filter-bar className="p-3.5 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/90 dark:bg-zinc-900/60 flex flex-col space-y-3 animate-in slide-in-from-top-2 duration-150">
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-zinc-400">
             <div className="flex items-center space-x-2">
               <Filter size={13} className="text-slate-500 dark:text-zinc-400" />
@@ -602,17 +603,21 @@ export const TableView: React.FC<TableViewProps> = ({
               {draftFilters.length > 0 && (
                 <button
                   onClick={clearAllFilters}
-                  className="text-xs text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded hover:bg-slate-200/60 dark:hover:bg-zinc-800 transition"
+                  className="text-xs text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded hover:bg-slate-200/60 dark:hover:bg-zinc-800 transition inline-flex items-center gap-1"
+                  title={`Clear all filters (${shortcutLabel('clearFilters')})`}
                 >
                   Clear All
+                  <ShortcutKeys id="clearFilters" className="px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700" />
                 </button>
               )}
               <button
                 onClick={applyFilters}
                 className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium text-xs transition shadow-xs flex items-center gap-1"
+                title={`Apply filters (${shortcutLabel('applyFilters')})`}
               >
                 <Check size={12} />
                 <span>Apply Filters</span>
+                <ShortcutKeys id="applyFilters" className="px-1 py-0.5 text-[9px] font-mono rounded bg-red-700 text-red-100" />
               </button>
             </div>
           </div>
@@ -1121,15 +1126,19 @@ export const TableView: React.FC<TableViewProps> = ({
             <button
               onClick={() => onPageChange(page - 1)}
               disabled={page <= 1}
-              className="p-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-zinc-900 transition shadow-xs"
+              title={`Previous page (${shortcutLabel('prevPage')})`}
+              className="p-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-zinc-900 transition shadow-xs inline-flex items-center gap-1"
             >
               <ChevronLeft size={14} />
+              <ShortcutKeys id="prevPage" className="hidden sm:inline text-[9px] font-mono text-slate-400" />
             </button>
             <button
               onClick={() => onPageChange(page + 1)}
               disabled={page >= totalPages}
-              className="p-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-zinc-900 transition shadow-xs"
+              title={`Next page (${shortcutLabel('nextPage')})`}
+              className="p-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-zinc-900 transition shadow-xs inline-flex items-center gap-1"
             >
+              <ShortcutKeys id="nextPage" className="hidden sm:inline text-[9px] font-mono text-slate-400" />
               <ChevronRight size={14} />
             </button>
           </div>

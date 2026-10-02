@@ -6,7 +6,7 @@ interface ThemeContextType {
   theme: Theme;
   resolvedTheme: 'light' | 'dark';
   setTheme: (theme: Theme) => void;
-  toggleTheme: (event?: { clientX: number; clientY: number }) => void;
+  toggleTheme: (anchor?: Element | { clientX: number; clientY: number }) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -45,16 +45,32 @@ const nativeStartViewTransition = () =>
   Document.prototype.startViewTransition?.bind(document) ??
   document.startViewTransition.bind(document);
 
-const clickPoint = (event?: { clientX: number; clientY: number }) => {
-  if (event && typeof event.clientX === 'number' && !('key' in event)) {
-    return { x: event.clientX, y: event.clientY };
+const anchorCenter = (el: Element | null | undefined) => {
+  if (!el || typeof el.getBoundingClientRect !== 'function') return null;
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return null;
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+};
+
+const themeButtonCenter = () => anchorCenter(document.querySelector('[data-theme-toggle]'));
+
+// Resolve the circle origin for the theme wipe. Always prefer the toggle
+// button's own rect so the animation starts/ends at the button — a raw mouse
+// point (or keyboard-activated click at 0,0) would land off-center.
+const clickPoint = (anchor?: Element | { clientX: number; clientY: number }) => {
+  if (anchor instanceof Element) {
+    return anchorCenter(anchor) ?? themeButtonCenter() ?? { x: window.innerWidth - 36, y: 28 };
   }
-  const btn = document.querySelector('[data-theme-toggle]');
-  if (btn) {
-    const r = btn.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  if (
+    anchor &&
+    typeof anchor.clientX === 'number' &&
+    typeof anchor.clientY === 'number' &&
+    !(anchor.clientX === 0 && anchor.clientY === 0) &&
+    !('key' in anchor)
+  ) {
+    return { x: anchor.clientX, y: anchor.clientY };
   }
-  return { x: window.innerWidth - 36, y: 28 };
+  return themeButtonCenter() ?? { x: window.innerWidth - 36, y: 28 };
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -100,7 +116,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const toggleTheme = (event?: { clientX: number; clientY: number }) => {
+  const toggleTheme = (anchor?: Element | { clientX: number; clientY: number }) => {
     const next: Theme = resolvedTheme === 'dark' ? 'light' : 'dark';
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const startViewTransition = nativeStartViewTransition();
@@ -111,7 +127,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
-    const { x, y } = clickPoint(event);
+    const { x, y } = clickPoint(anchor);
     const endRadius = Math.hypot(
       Math.max(x, window.innerWidth - x),
       Math.max(y, window.innerHeight - y)
@@ -162,6 +178,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       transition = startViewTransition(() => {
         paintTheme(resolveTheme(next), false);
+        // UA-painted controls (native checkbox, etc.) follow `color-scheme`,
+        // not author classes — so the incoming snapshot must be captured with
+        // the NEW scheme, otherwise they reveal "old" and only snap at finish.
+        // Side effect: the live scrollbar (not part of snapshots) flips early.
+        root.style.colorScheme = resolveTheme(next);
         try {
           localStorage.setItem('rails_studio_theme', next);
         } catch {
