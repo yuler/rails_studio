@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, PlusCircle, AlertCircle } from 'lucide-react';
 import { TableSchema, ColumnMeta } from '../types';
 import { ForeignKeySelect } from './ForeignKeySelect';
 import { BooleanToggle } from './BooleanToggle';
+import { shortcutLabel } from '../shortcuts';
+import { useDismiss, useOverlay, useShortcut } from '../useShortcut';
+import { ShortcutKeys } from './ShortcutKeys';
 
 interface InsertModalProps {
   schema: TableSchema;
@@ -29,6 +32,10 @@ export const InsertModal: React.FC<InsertModalProps> = ({ schema, onClose, onSub
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  useOverlay(true);
+  useDismiss('insert', onClose, true, 40);
+  useShortcut('insertRecord', () => formRef.current?.requestSubmit(), !loading);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,7 +233,7 @@ export const InsertModal: React.FC<InsertModalProps> = ({ schema, onClose, onSub
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-3">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-3">
           {error && (
             <div className="p-3 bg-rose-50 dark:bg-red-950/40 border border-rose-200 dark:border-red-800/60 rounded text-rose-700 dark:text-red-300 text-xs flex items-center gap-2">
               <AlertCircle size={14} className="shrink-0" />
@@ -268,9 +275,11 @@ export const InsertModal: React.FC<InsertModalProps> = ({ schema, onClose, onSub
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition disabled:opacity-50 shadow-sm"
+              title={`Insert record (${shortcutLabel('insertRecord')})`}
+              className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition disabled:opacity-50 shadow-sm inline-flex items-center gap-1.5"
             >
               {loading ? 'Inserting...' : 'Insert Record'}
+              <ShortcutKeys id="insertRecord" className="px-1 py-0.5 text-[9px] font-mono rounded bg-emerald-700 text-emerald-100" />
             </button>
           </div>
         </form>

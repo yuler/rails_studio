@@ -3,6 +3,9 @@ import { Check, Save, Undo2 } from 'lucide-react';
 import { getConfig, saveBatch } from '../api';
 import { ColumnMeta, StagedChange, TableSchema } from '../types';
 import { BooleanToggle, coerceBoolean } from './BooleanToggle';
+import { chordMatches, shortcutLabel } from '../shortcuts';
+import { isOverlayOpen, useShortcut } from '../useShortcut';
+import { ShortcutKeys } from './ShortcutKeys';
 
 interface SqlResultTableProps {
   columns: string[];
@@ -190,26 +193,21 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(target?.isContentEditable);
-      if (isTyping || editingCell || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTyping || editingCell || isOverlayOpen()) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (!navActive) return;
-
-      if ((e.key === 'd' || e.key === 'D') && selectedRowIds.size > 0) {
-        e.preventDefault();
-        void handleDelete();
-        return;
-      }
       if (filteredRows.length === 0) return;
-      if (e.key === 'ArrowDown') {
+      if (chordMatches(e, { code: 'ArrowDown' })) {
         e.preventDefault();
         setFocusedRowIndex((i) => Math.min(filteredRows.length - 1, i + 1));
         return;
       }
-      if (e.key === 'ArrowUp') {
+      if (chordMatches(e, { code: 'ArrowUp' })) {
         e.preventDefault();
         setFocusedRowIndex((i) => Math.max(0, i - 1));
         return;
       }
-      if ((e.key === ' ' || e.code === 'Space')) {
+      if (chordMatches(e, { code: 'Space' })) {
         e.preventDefault();
         const row = filteredRows[focusedRowIndex];
         if (row) toggleRow(rowIdOfRow(row, focusedRowIndex));
@@ -275,6 +273,10 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
       setSaving(false);
     }
   };
+
+  useShortcut('deleteResultRows', () => void handleDelete(), Boolean(editable && navActive && selectedRowIds.size > 0));
+  useShortcut('saveResultEdits', () => void handleSave(), stagedChanges.size > 0 && !saving);
+  useShortcut('discardResultEdits', () => setStagedChanges(new Map()), stagedChanges.size > 0);
 
   const renderCell = (row: any[], rowId: string, col: string, cellIdx: number) => {
     const originalVal = row[cellIdx];
@@ -350,20 +352,24 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
             type="button"
             tabIndex={-1}
             onClick={() => setStagedChanges(new Map())}
+            title={`Discard (${shortcutLabel('discardResultEdits')})`}
             className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 flex items-center gap-1.5"
           >
             <Undo2 size={12} />
             Discard
+            <ShortcutKeys id="discardResultEdits" className="px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700" />
           </button>
           <button
             type="button"
             tabIndex={-1}
             onClick={() => void handleSave()}
             disabled={saving}
+            title={`Save (${shortcutLabel('saveResultEdits')})`}
             className="px-2.5 py-1 rounded-md bg-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center gap-1.5 disabled:opacity-50"
           >
             {saving ? <Save size={12} className="animate-pulse" /> : <Check size={12} />}
             Save ({stagedChanges.size})
+            <ShortcutKeys id="saveResultEdits" className="px-1 py-0.5 text-[9px] font-mono rounded bg-white/20" />
           </button>
           {notice && <span className="ml-auto text-[11px] text-slate-500 dark:text-zinc-400">{notice}</span>}
         </div>

@@ -26,6 +26,9 @@ import { executeQuery, fetchConsoleCompletions, fetchTableSchema } from '../api'
 import { QueryResult, TableMeta, ConsoleModelMeta, TableSchema } from '../types';
 import { SqlResultTable, SqlResultTableHandle } from './SqlResultTable';
 import { SqlStarsModal, StarredQuery } from './SqlStarsModal';
+import { chordMatches, shortcutLabel } from '../shortcuts';
+import { useOverlay, useShortcut } from '../useShortcut';
+import { ShortcutKeys } from './ShortcutKeys';
 
 interface SqlRunnerProps {
   tables: TableMeta[];
@@ -73,11 +76,8 @@ const SQL_FUNCTIONS = [
 ];
 
 export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce = 0, onOpenConsole }) => {
-  const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
   const kbdClass =
     'hidden sm:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500';
-  const altChord = (key: string) => `Ctrl+Alt+${key}`;
-  const runChord = isMac ? 'Cmd+Enter' : 'Ctrl+Enter';
   const firstTableName = tables[0]?.name || 'users';
 
   // Tabs state (Drizzle Studio multi-tab query runner)
@@ -227,8 +227,8 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
   };
 
   // Close tab
-  const handleCloseTab = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCloseTab = (id: string, e?: { stopPropagation: () => void }) => {
+    e?.stopPropagation();
     if (tabs.length <= 1) return;
     const nextTabs = tabs.filter((t) => t.id !== id);
     setTabs(nextTabs);
@@ -529,68 +529,42 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
     return () => window.removeEventListener('keydown', onEscape, true);
   }, [showStars, showSaveStar]);
 
+  useOverlay(showStars || showSaveStar);
+  useShortcut('runSql', () => {
+    setShowSuggestions(false);
+    void handleRun();
+  });
+  useShortcut('formatSql', handleFormat);
+  useShortcut('newSqlTab', handleAddTab);
+  useShortcut('closeSqlTab', () => handleCloseTab(activeTabId), tabs.length > 1);
+  useShortcut('clearSql', handleClear);
+  useShortcut('toggleSplit', handleToggleSplit);
+  useShortcut('openStars', () => setShowStars((prev) => !prev));
+  useShortcut('saveStar', openSaveStar);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (showStars || showSaveStar) return;
-
-      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (
-          e.target === textareaRef.current &&
-          showSuggestions &&
-          suggestions.length > 0
-        ) {
-          return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        if (pane === 'editor' || e.target === textareaRef.current) {
-          focusResults();
-        } else {
-          focusEditor();
-        }
+      if (!chordMatches(e, { code: 'Tab' })) return;
+      if (
+        e.target === textareaRef.current &&
+        showSuggestions &&
+        suggestions.length > 0
+      ) {
         return;
       }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        setShowSuggestions(false);
-        handleRun();
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyS') {
-        e.preventDefault();
-        openSaveStar();
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'Backslash') {
-        e.preventDefault();
-        handleToggleSplit();
-        return;
-      }
-
-      // Ctrl+Alt chords work while the SQL textarea is focused
-      if (e.ctrlKey && e.altKey && !e.metaKey) {
-        if (e.code === 'KeyF') {
-          e.preventDefault();
-          handleFormat();
-        } else if (e.code === 'KeyX') {
-          e.preventDefault();
-          handleClear();
-        } else if (e.code === 'KeyS') {
-          e.preventDefault();
-          setShowStars((prev) => !prev);
-        } else if (e.code === 'KeyN') {
-          e.preventDefault();
-          handleAddTab();
-        }
+      e.preventDefault();
+      e.stopPropagation();
+      if (pane === 'editor' || e.target === textareaRef.current) {
+        focusResults();
+      } else {
+        focusEditor();
       }
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pane, sql, showSuggestions, suggestions.length, splitMode, loading, tabs.length, showStars, showSaveStar, stars]);
+  }, [pane, showSuggestions, suggestions.length, showStars, showSaveStar]);
 
   // Export CSV
   const exportCSV = () => {
@@ -634,6 +608,9 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
     setTimeout(() => setCopiedResult(false), 2000);
   };
 
+  useShortcut('copyJson', handleCopyJSON, Boolean(result?.rows?.length));
+  useShortcut('exportCsv', exportCSV, Boolean(result?.rows?.length));
+
   // Line count for gutter
   const lineCount = (sql.split('\n').length) || 1;
   const lines = Array.from({ length: Math.max(lineCount, 6) }, (_, i) => i + 1);
@@ -643,7 +620,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors">
+    <div data-shortcut-scope="sql" className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 select-none transition-colors">
       {/* 1. Drizzle Studio Style Header Bar */}
       <div className="h-[46px] px-2.5 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0 gap-2">
         {/* Left: Query Tabs */}
@@ -665,6 +642,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                 {tabs.length > 1 && (
                   <button
                     onClick={(e) => handleCloseTab(tab.id, e)}
+                    title={`Close tab (${shortcutLabel('closeSqlTab')})`}
                     className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition"
                   >
                     <X size={11} />
@@ -679,10 +657,10 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             tabIndex={-1}
             onClick={handleAddTab}
             className="flex items-center gap-1 p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-slate-200/60 dark:hover:bg-zinc-800 transition"
-            title={`New Query Tab (${altChord('N')})`}
+            title={`New Query Tab (${shortcutLabel('newSqlTab')})`}
           >
             <Plus size={13} />
-            <kbd className={kbdClass}>{altChord('N')}</kbd>
+            <ShortcutKeys id="newSqlTab" className={kbdClass} />
           </button>
         </div>
 
@@ -697,11 +675,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                 ? 'bg-slate-200 dark:bg-zinc-800 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100'
                 : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800'
             }`}
-            title={`Starred queries (${altChord('S')})`}
+            title={`Starred queries (${shortcutLabel('openStars')})`}
           >
             <Star size={12} className={stars.length > 0 ? 'text-amber-500 fill-amber-500' : ''} />
             <span className="hidden sm:inline">Stars</span>
-            <kbd className={kbdClass}>{altChord('S')}</kbd>
+            <ShortcutKeys id="openStars" className={kbdClass} />
             {stars.length > 0 && (
               <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({stars.length})</span>
             )}
@@ -714,11 +692,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             onClick={handleFormat}
             disabled={!sql.trim()}
             className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs flex items-center space-x-1"
-            title={`Format / Prettify SQL (${altChord('F')})`}
+            title={`Format / Prettify SQL (${shortcutLabel('formatSql')})`}
           >
             <Wand2 size={13} />
             <span className="hidden sm:inline">Format</span>
-            <kbd className={kbdClass}>{altChord('F')}</kbd>
+            <ShortcutKeys id="formatSql" className={kbdClass} />
           </button>
 
           <button
@@ -727,11 +705,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             onClick={handleClear}
             disabled={!sql.trim()}
             className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 shadow-xs flex items-center space-x-1"
-            title={`Clear SQL editor (${altChord('X')})`}
+            title={`Clear SQL editor (${shortcutLabel('clearSql')})`}
           >
             <Trash2 size={13} />
             <span className="hidden sm:inline">Clear</span>
-            <kbd className={kbdClass}>{altChord('X')}</kbd>
+            <ShortcutKeys id="clearSql" className={kbdClass} />
           </button>
 
           <button
@@ -739,10 +717,10 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             tabIndex={-1}
             onClick={handleToggleSplit}
             className="px-2.5 py-1 text-xs font-mono rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 transition shadow-xs flex items-center space-x-1"
-            title={`Switch to ${splitMode === 'horizontal' ? 'Side-by-side (Vertical)' : 'Stacked (Horizontal)'} layout (Ctrl+\\)`}
+            title={`Switch to ${splitMode === 'horizontal' ? 'Side-by-side (Vertical)' : 'Stacked (Horizontal)'} layout (${shortcutLabel('toggleSplit')})`}
           >
             {splitMode === 'horizontal' ? <Columns2 size={13} /> : <Rows2 size={13} />}
-            <kbd className={kbdClass}>Ctrl+\</kbd>
+            <ShortcutKeys id="toggleSplit" className={kbdClass} />
           </button>
 
           <button
@@ -751,13 +729,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             onClick={() => handleRun()}
             disabled={loading || !sql.trim()}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 font-medium text-xs shadow-sm transition disabled:opacity-50"
-            title={`Run Query (${runChord})`}
+            title={`Run Query (${shortcutLabel('runSql')})`}
           >
             <Play size={12} className={loading ? 'animate-spin' : ''} />
             <span>{loading ? 'Running...' : 'Run'}</span>
-            <kbd className="hidden sm:inline-flex px-1 py-0.2 text-[9px] font-mono rounded bg-slate-800 dark:bg-zinc-200 text-slate-300 dark:text-zinc-700">
-              {runChord}
-            </kbd>
+            <ShortcutKeys id="runSql" className="hidden sm:inline-flex px-1 py-0.2 text-[9px] font-mono rounded bg-slate-800 dark:bg-zinc-200 text-slate-300 dark:text-zinc-700" />
           </button>
         </div>
       </div>
@@ -868,7 +844,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
             <div className="flex items-center space-x-2">
               <span>Tab switches editor / results</span>
               <span>•</span>
-              <span>{isMac ? 'Cmd+S' : 'Ctrl+S'} to star</span>
+              <span>{shortcutLabel('saveStar')} to star</span>
             </div>
             <div>
               <span>{sql.length} chars</span>
@@ -926,13 +902,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                       tabIndex={-1}
                       onClick={() => void resultTableRef.current?.deleteSelected()}
                       className="px-2.5 py-1 rounded-md bg-rose-50 dark:bg-red-950/80 border border-rose-200 dark:border-red-800 text-rose-700 dark:text-red-300 hover:bg-rose-100 dark:hover:bg-red-900/80 transition flex items-center space-x-1.5 shrink-0"
-                      title="Delete selected rows (D)"
+                      title={`Delete selected rows (${shortcutLabel('deleteResultRows')})`}
                     >
                       <Trash2 size={12} />
                       <span>Delete ({resultSelectedCount})</span>
-                      <kbd className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-rose-100 dark:bg-red-900/80 border border-rose-200 dark:border-red-800 text-rose-600 dark:text-red-300">
-                        D
-                      </kbd>
+                      <ShortcutKeys id="deleteResultRows" className="hidden sm:inline-flex px-1.5 py-0.2 text-[9px] font-mono rounded bg-rose-100 dark:bg-red-900/80 border border-rose-200 dark:border-red-800 text-rose-600 dark:text-red-300" />
                     </button>
                   )}
                 </>
@@ -974,10 +948,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                   tabIndex={-1}
                   onClick={handleCopyJSON}
                   className="flex items-center space-x-1 px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition text-[11px] shadow-xs"
-                  title="Copy results as JSON"
+                  title={`Copy results as JSON (${shortcutLabel('copyJson')})`}
                 >
                   {copiedResult ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
                   <span className="hidden sm:inline">{copiedResult ? 'Copied!' : 'JSON'}</span>
+                  <ShortcutKeys id="copyJson" className={kbdClass} />
                 </button>
 
                 <button
@@ -985,10 +960,11 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                   tabIndex={-1}
                   onClick={exportCSV}
                   className="flex items-center space-x-1 px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition text-[11px] shadow-xs"
-                  title="Export results to CSV"
+                  title={`Export results to CSV (${shortcutLabel('exportCsv')})`}
                 >
                   <Download size={12} />
                   <span className="hidden sm:inline">CSV</span>
+                  <ShortcutKeys id="exportCsv" className={kbdClass} />
                 </button>
               </div>
             )}
@@ -1055,7 +1031,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
                 <div>
                   <p className="font-semibold text-slate-700 dark:text-zinc-300">Ready to execute SQL query</p>
                   <p className="text-[11px] mt-1 text-slate-400 dark:text-zinc-500">
-                    Write raw SQL above and press <span className="font-semibold">{runChord}</span> or click Run
+                    Write raw SQL above and press <span className="font-semibold">{shortcutLabel('runSql')}</span> or click Run
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1">

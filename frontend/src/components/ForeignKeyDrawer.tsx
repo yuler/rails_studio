@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, ExternalLink, Key, Link2, Copy, Check } from 'lucide-react';
 import { fetchRecordById, fetchTableSchema } from '../api';
 import { TableSchema } from '../types';
+import { useDismiss, useOverlay } from '../useShortcut';
 
 interface ForeignKeyDrawerProps {
   targetTable: string;
@@ -23,6 +24,8 @@ export const ForeignKeyDrawer: React.FC<ForeignKeyDrawerProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  useOverlay(true);
+  useDismiss('fk-drawer', onClose, true, 30);
 
   useEffect(() => {
     let cancelled = false;

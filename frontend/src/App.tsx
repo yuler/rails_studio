@@ -25,6 +25,9 @@ import {
   deleteRecord
 } from './api';
 import { useTheme } from './theme';
+import { shortcutLabel } from './shortcuts';
+import { ShortcutKeys } from './components/ShortcutKeys';
+import { isOverlayOpen, setShortcutSurface, useEscapeDismiss, useShortcut } from './useShortcut';
 
 export const App: React.FC = () => {
   const { toggleTheme } = useTheme();
@@ -270,186 +273,34 @@ export const App: React.FC = () => {
     }
   };
 
-  // Global keyboard shortcuts
   useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // 1. Cmd/Ctrl + K -> Toggle Command Palette
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-        return;
-      }
+    setShortcutSurface(activeTab);
+  }, [activeTab]);
 
-      // 2. Cmd/Ctrl + B -> Toggle sidebar / brand column
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'b') {
-        e.preventDefault();
-        toggleSidebar();
-        return;
-      }
-
-      // 3. Cmd/Ctrl + ` -> Toggle Rails Console
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'Backquote' || e.key === '`' || e.key === '~')) {
-        e.preventDefault();
-        setConsoleOpen((prev) => !prev);
-        return;
-      }
-
-      // 4. Cmd/Ctrl + [ -> Switch to Tables
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === '[' || e.code === 'BracketLeft')) {
-        if (!commandPaletteOpen && !shortcutsModalOpen && !showInsertModal && !fkDrawer) {
-          e.preventDefault();
-          setActiveTab('tables');
-          return;
-        }
-      }
-
-      // 5. Cmd/Ctrl + ] -> Switch to SQL Runner
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === ']' || e.code === 'BracketRight')) {
-        if (!commandPaletteOpen && !shortcutsModalOpen && !showInsertModal && !fkDrawer) {
-          e.preventDefault();
-          setActiveTab('sql');
-          setSqlEditorFocusNonce((n) => n + 1);
-          return;
-        }
-      }
-
-      // Cmd/Ctrl + S: SQL runner stars its query; tables save pending cell edits
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        if (activeTab === 'sql') return;
-        if (stagedChanges.size > 0 && !savingChanges) {
-          handleSaveChanges();
-        }
-        return;
-      }
-
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      const isTyping =
-        tag === 'input' ||
-        tag === 'textarea' ||
-        tag === 'select' ||
-        target?.isContentEditable;
-
-      // Cmd/Ctrl + C -> Discard pending changes (copy still works while typing)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-        if (!isTyping && stagedChanges.size > 0) {
-          e.preventDefault();
-          handleDiscardChanges();
-        }
-        return;
-      }
-
-      // Escape -> close popups / blur inputs, then topmost overlay
-      if (e.key === 'Escape') {
-        if (commandPaletteOpen) {
-          e.preventDefault();
-          setCommandPaletteOpen(false);
-          return;
-        }
-        if (shortcutsModalOpen) {
-          e.preventDefault();
-          setShortcutsModalOpen(false);
-          return;
-        }
-        if (isTyping) {
-          e.preventDefault();
-          target?.blur();
-          return;
-        }
-        if (showInsertModal) {
-          e.preventDefault();
-          setShowInsertModal(false);
-          return;
-        }
-        if (fkDrawer) {
-          e.preventDefault();
-          setFkDrawer(null);
-          return;
-        }
-        if (consoleOpen) {
-          e.preventDefault();
-          setConsoleOpen(false);
-          return;
-        }
-      }
-
-      // Single key shortcuts (only if NOT in an input/textarea/select/editable element and no modals open)
-      if (isTyping || commandPaletteOpen || shortcutsModalOpen || showInsertModal || fkDrawer) {
-        return;
-      }
-
-      // '?' -> Open Shortcuts Modal
-      if (e.key === '?') {
-        e.preventDefault();
-        setShortcutsModalOpen((prev) => !prev);
-        return;
-      }
-
-      // 't' / 'T' -> Toggle light / dark theme
-      if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        toggleTheme();
-        return;
-      }
-
-      // Tab / ArrowLeft / ArrowRight -> switch sidebar vs table
-      if (activeTab === 'tables' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          setNavPane((prev) => (prev === 'sidebar' ? 'records' : 'sidebar'));
-          return;
-        }
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          setNavPane('sidebar');
-          return;
-        }
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          setNavPane('records');
-          return;
-        }
-      }
-
-      // 'n' or 'N' -> New Record
-      if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey) {
-        if (selectedTable && activeTab === 'tables' && schema) {
-          e.preventDefault();
-          setShowInsertModal(true);
-        }
-        return;
-      }
-
-      // 'f' or 'F' -> Toggle Filters
-      if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey) {
-        if (selectedTable && activeTab === 'tables') {
-          e.preventDefault();
-          setShowFilterBar((prev) => !prev);
-        }
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [
-    commandPaletteOpen,
-    shortcutsModalOpen,
-    showInsertModal,
-    fkDrawer,
-    consoleOpen,
-    stagedChanges.size,
-    savingChanges,
-    selectedTable,
-    activeTab,
-    schema,
-    handleSaveChanges,
-    handleDiscardChanges,
-    loadSchemaAndRecords,
-    toggleSidebar,
-    toggleTheme
-  ]);
+  useEscapeDismiss();
+  useShortcut('commandPalette', () => setCommandPaletteOpen((prev) => !prev), {
+    accept: () => !isOverlayOpen() || commandPaletteOpen
+  });
+  useShortcut('toggleSidebar', toggleSidebar);
+  useShortcut('toggleConsole', () => setConsoleOpen((prev) => !prev));
+  useShortcut('viewTables', () => setActiveTab('tables'));
+  useShortcut('viewSql', () => {
+    setActiveTab('sql');
+    setSqlEditorFocusNonce((n) => n + 1);
+  });
+  useShortcut('toggleTheme', toggleTheme);
+  useShortcut('showShortcuts', () => setShortcutsModalOpen((prev) => !prev), {
+    accept: () => !isOverlayOpen() || shortcutsModalOpen
+  });
+  useShortcut('saveChanges', () => {
+    if (stagedChanges.size > 0 && !savingChanges) void handleSaveChanges();
+  });
+  useShortcut('discardChanges', () => {
+    if (stagedChanges.size > 0 && !savingChanges) handleDiscardChanges();
+  });
+  useShortcut('focusCycle', () => setNavPane((prev) => (prev === 'sidebar' ? 'records' : 'sidebar')));
+  useShortcut('focusSidebar', () => setNavPane('sidebar'));
+  useShortcut('focusTable', () => setNavPane('records'));
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 antialiased font-sans">
@@ -585,25 +436,27 @@ export const App: React.FC = () => {
               onClick={handleDiscardChanges}
               disabled={savingChanges}
               className="text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white text-xs px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition flex items-center gap-1.5 font-medium disabled:opacity-50"
-              title="Discard all changes (Ctrl+C)"
+              title={`Discard all changes (${shortcutLabel('discardChanges')})`}
             >
               <Undo2 size={13} />
               <span>Discard</span>
-              <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono rounded bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400">
-                Ctrl+C
-              </kbd>
+              <ShortcutKeys
+                id="discardChanges"
+                className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono rounded bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400"
+              />
             </button>
             <button
               onClick={handleSaveChanges}
               disabled={savingChanges}
               className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-              title="Save all changes (Ctrl+S)"
+              title={`Save all changes (${shortcutLabel('saveChanges')})`}
             >
               <Save size={13} />
               <span>{savingChanges ? 'Saving...' : 'Save'}</span>
-              <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono rounded bg-emerald-700 text-emerald-100 border border-emerald-500/40">
-                Ctrl+S
-              </kbd>
+              <ShortcutKeys
+                id="saveChanges"
+                className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-mono rounded bg-emerald-700 text-emerald-100 border border-emerald-500/40"
+              />
             </button>
           </div>
         </div>

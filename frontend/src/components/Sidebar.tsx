@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Table, Search, Key, Link2, Layers } from 'lucide-react';
 import { TableMeta } from '../types';
+import { chordMatches, shortcutLabel } from '../shortcuts';
+import { isOverlayOpen } from '../useShortcut';
 
 interface SidebarProps {
   tables: TableMeta[];
@@ -58,7 +60,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const tag = target?.tagName?.toLowerCase();
       const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
 
-      if (!isTyping && e.key === '/' && !e.ctrlKey && !e.metaKey) {
+      if (isOverlayOpen()) return;
+
+      if (!isTyping && chordMatches(e, { code: 'Slash' })) {
         e.preventDefault();
         onActivate?.();
         inputRef.current?.focus();
@@ -69,13 +73,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (!navActive || e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping && target !== inputRef.current) return;
 
-      if (e.key === 'ArrowDown') {
+      if (chordMatches(e, { code: 'ArrowDown' })) {
         e.preventDefault();
         moveHighlight(1);
-      } else if (e.key === 'ArrowUp') {
+      } else if (chordMatches(e, { code: 'ArrowUp' })) {
         e.preventDefault();
         moveHighlight(-1);
-      } else if (e.key === 'Enter' && (target === inputRef.current || !isTyping)) {
+      } else if (chordMatches(e, { code: 'Enter' }) && (target === inputRef.current || !isTyping)) {
         e.preventDefault();
         confirmHighlight();
       }
@@ -88,6 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className="w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none transition-colors"
+      data-shortcut-scope="sidebar"
       onMouseDown={() => onActivate?.()}
     >
       {/* Search Tables Input */}
@@ -112,9 +117,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
           <kbd
             className="absolute right-2 px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 shadow-xs pointer-events-none"
-            title="Press / to search tables"
+            title={`Press ${shortcutLabel('sidebarSearch')} to search tables`}
           >
-            /
+            {shortcutLabel('sidebarSearch')}
           </kbd>
         </div>
       </div>
