@@ -184,11 +184,10 @@ export const App: React.FC = () => {
     setNavPane('records');
   };
 
-  const handleOpenInsertModalForTable = (tableName?: string) => {
-    if (tableName && tableName !== selectedTable) {
-      handleSelectTable(tableName);
-    }
-    setShowInsertModal(true);
+  const handleTableMutated = async (tableName: string) => {
+    if (tableName === selectedTable) setStagedChanges(new Map());
+    await loadOverview();
+    if (tableName === selectedTable && activeTab === 'tables') loadSchemaAndRecords(tableName).catch(() => {});
   };
 
   // Sorting
@@ -382,12 +381,12 @@ export const App: React.FC = () => {
             selectedTable={selectedTable}
             onSelectTable={handleSelectTable}
             onQueryTable={handleQueryTable}
+            queryOnSelect={activeTab === 'sql'}
             loading={loadingOverview}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             navActive={navPane === 'sidebar'}
             onActivate={() => setNavPane('sidebar')}
-            onOpenInsertModal={handleOpenInsertModalForTable}
-            onRefreshTables={loadOverview}
+            onTableMutated={handleTableMutated}
             onShowToast={showToast}
           />
         )}
@@ -444,6 +443,7 @@ export const App: React.FC = () => {
             initialSql={sharedSql}
             sqlSeedId={sqlSeedId}
             onSqlChange={setSharedSql}
+            onOpenForeignKey={(targetTable, targetId) => setFkDrawer({ table: targetTable, id: targetId })}
             onOpenConsole={(cmd) => {
               setConsoleInitialCommand(cmd);
               setConsoleOpen(true);

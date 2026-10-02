@@ -103,6 +103,14 @@ export async function deleteRecord(tableName: string, id: any): Promise<{ succes
   });
 }
 
+export async function truncateTable(tableName: string): Promise<{ success: boolean }> {
+  return request(`/tables/${encodeURIComponent(tableName)}/truncate`, { method: 'POST' });
+}
+
+export async function dropTable(tableName: string): Promise<{ success: boolean }> {
+  return request(`/tables/${encodeURIComponent(tableName)}`, { method: 'DELETE' });
+}
+
 export async function saveBatch(
   tableName: string,
   payload: {

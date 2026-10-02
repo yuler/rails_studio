@@ -248,6 +248,38 @@ class ApiTest < ActionDispatch::IntegrationTest
     RailsStudio.configuration.read_only = false
   end
 
+  test "POST truncate empties a table and DELETE drops it" do
+    connection = ActiveRecord::Base.connection
+    connection.create_table(:scratch_items) { |t| t.string :name }
+    connection.execute("INSERT INTO scratch_items (name) VALUES ('a'), ('b')")
+
+    post "/rails_studio/api/tables/scratch_items/truncate"
+    assert_response :success
+    assert_equal 0, connection.select_value("SELECT COUNT(*) FROM scratch_items")
+
+    delete "/rails_studio/api/tables/scratch_items"
+    assert_response :success
+    assert_not connection.table_exists?(:scratch_items)
+
+    delete "/rails_studio/api/tables/scratch_items"
+    assert_response :not_found
+  ensure
+    connection.drop_table(:scratch_items, if_exists: true)
+  end
+
+  test "Read-only mode blocks truncating and dropping tables" do
+    RailsStudio.configuration.read_only = true
+
+    post "/rails_studio/api/tables/users/truncate"
+    assert_response :forbidden
+
+    delete "/rails_studio/api/tables/users"
+    assert_response :forbidden
+    assert ActiveRecord::Base.connection.table_exists?(:users)
+  ensure
+    RailsStudio.configuration.read_only = false
+  end
+
   test "Enum column strings are correctly mapped and persisted without being cast to 0" do
     post "/rails_studio/api/tables/users/records", params: {
       record: { name: "David", email: "david@example.com", role: "member", active: true }

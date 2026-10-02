@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Table, Search, Key, Link2, Layers, Terminal, Plus, Copy, RefreshCw } from 'lucide-react';
+import { Table, Search, Key, Link2, Layers, Terminal, Copy, Eraser, Trash2 } from 'lucide-react';
+import { dropTable, getConfig, truncateTable } from '../api';
 import { TableMeta } from '../types';
 import { chordMatches, shortcutLabel } from '../shortcuts';
 import { isOverlayOpen } from '../useShortcut';
@@ -10,12 +11,12 @@ interface SidebarProps {
   selectedTable: string | null;
   onSelectTable: (name: string) => void;
   onQueryTable?: (name: string) => void;
+  queryOnSelect?: boolean;
   loading: boolean;
   onOpenCommandPalette?: () => void;
   navActive?: boolean;
   onActivate?: () => void;
-  onOpenInsertModal?: (tableName?: string) => void;
-  onRefreshTables?: () => void;
+  onTableMutated?: (tableName: string) => void;
   onShowToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
@@ -24,12 +25,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedTable,
   onSelectTable,
   onQueryTable,
+  queryOnSelect = false,
   loading,
   onOpenCommandPalette,
   navActive = true,
   onActivate,
-  onOpenInsertModal,
-  onRefreshTables,
+  onTableMutated,
   onShowToast
 }) => {
   const [search, setSearch] = useState('');
@@ -62,7 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activateTable = (name: string) => {
     setHighlightedName(name);
     onSelectTable(name);
-    onQueryTable?.(name);
+    if (queryOnSelect) onQueryTable?.(name);
   };
 
   const confirmHighlight = () => {
@@ -106,6 +107,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable, onQueryTable, onSelectTable]);
 
+  const runTableMutation = async (name: string, action: 'truncate' | 'drop') => {
+    const prompt =
+      action === 'truncate'
+        ? `Delete ALL rows from "${name}"? This cannot be undone.`
+        : `Drop table "${name}" and all its data? This cannot be undone.`;
+    if (!confirm(prompt)) return;
+    try {
+      await (action === 'truncate' ? truncateTable(name) : dropTable(name));
+      onShowToast?.(action === 'truncate' ? `Truncated "${name}"` : `Dropped "${name}"`);
+      onTableMutated?.(name);
+    } catch (err: any) {
+      onShowToast?.(err.message || `Failed to ${action} "${name}"`, 'error');
+    }
+  };
+
+  const readOnly = Boolean(getConfig().readOnly);
+
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
@@ -122,12 +140,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick: () => onQueryTable?.(contextMenu.table.name)
         },
         {
-          id: 'insert-record',
-          label: 'Insert Record',
-          icon: <Plus size={13} />,
-          onClick: () => onOpenInsertModal?.(contextMenu.table.name)
-        },
-        {
           id: 'copy-name',
           label: 'Copy Table Name',
           icon: <Copy size={13} />,
@@ -140,10 +152,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         { separator: true },
         {
-          id: 'refresh-tables',
-          label: 'Refresh Tables',
-          icon: <RefreshCw size={13} />,
-          onClick: () => onRefreshTables?.()
+          id: 'truncate-table',
+          label: 'Truncate Table',
+          icon: <Eraser size={13} />,
+          danger: true,
+          disabled: readOnly,
+          onClick: () => void runTableMutation(contextMenu.table.name, 'truncate')
+        },
+        {
+          id: 'drop-table',
+          label: 'Drop Table',
+          icon: <Trash2 size={13} />,
+          danger: true,
+          disabled: readOnly,
+          onClick: () => void runTableMutation(contextMenu.table.name, 'drop')
         }
       ]
     : [];

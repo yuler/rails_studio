@@ -7,6 +7,8 @@ RailsStudio::Engine.routes.draw do
   namespace :api do
     get "overview", to: "overview#show"
     get "tables/:table_name/schema", to: "tables#schema"
+    post "tables/:table_name/truncate", to: "tables#truncate"
+    delete "tables/:table_name", to: "tables#destroy"
     get "tables/:table_name/records", to: "records#index"
     post "tables/:table_name/records", to: "records#create"
     get "tables/:table_name/records/:id", to: "records#show"
