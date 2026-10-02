@@ -149,6 +149,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       }}
       className="fixed z-50 min-w-[190px] py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-xl shadow-slate-900/10 dark:shadow-black/50 text-xs font-mono select-none"
       onClick={(e) => e.stopPropagation()}
+      onMouseLeave={() => setFocusedIndex(-1)}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -167,7 +168,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
         const isClickable = !item.disabled && Boolean(item.onClick);
         if (isClickable) clickableCursor += 1;
-        const isFocused = isClickable && clickableCursor === focusedIndex;
+        const itemIndex = clickableCursor;
+        const isFocused = isClickable && itemIndex === focusedIndex;
 
         return (
           <button
@@ -180,8 +182,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
               item.onClick?.();
               onClose();
             }}
-            onMouseEnter={() => {
-              if (isClickable) setFocusedIndex(clickableCursor);
+            onMouseMove={() => {
+              if (isClickable && focusedIndex !== itemIndex) setFocusedIndex(itemIndex);
             }}
             className={`w-full px-3 py-1.5 flex items-center justify-between text-left transition-colors cursor-pointer disabled:cursor-not-allowed ${
               item.disabled
