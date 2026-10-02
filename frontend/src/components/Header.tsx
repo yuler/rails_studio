@@ -145,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             data-theme-toggle
-            onClick={toggleTheme}
+            onClick={(e) => toggleTheme(e.currentTarget)}
             className={headerBtn}
             title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode (${shortcutLabel('toggleTheme')})`}
             aria-label="Toggle theme"

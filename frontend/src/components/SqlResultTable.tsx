@@ -274,9 +274,17 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
     }
   };
 
+  const inResults = (event: KeyboardEvent) =>
+    event.target instanceof Element && Boolean(event.target.closest('[data-sql-results]'));
+
   useShortcut('deleteResultRows', () => void handleDelete(), Boolean(editable && navActive && selectedRowIds.size > 0));
-  useShortcut('saveResultEdits', () => void handleSave(), stagedChanges.size > 0 && !saving);
-  useShortcut('discardResultEdits', () => setStagedChanges(new Map()), stagedChanges.size > 0);
+  useShortcut('saveResultEdits', () => {
+    if (stagedChanges.size > 0 && !saving) void handleSave();
+  }, { accept: inResults });
+  useShortcut('discardResultEdits', () => setStagedChanges(new Map()), {
+    enabled: stagedChanges.size > 0,
+    accept: inResults
+  });
 
   const renderCell = (row: any[], rowId: string, col: string, cellIdx: number) => {
     const originalVal = row[cellIdx];

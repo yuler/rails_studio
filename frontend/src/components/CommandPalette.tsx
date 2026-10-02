@@ -427,12 +427,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         <div className="px-4 py-2 bg-slate-50 dark:bg-zinc-950/80 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↑</kbd>
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↓</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Up</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Down</kbd>
               navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">↵</kbd>
+              <kbd className="px-1 py-0.5 text-[9px] font-mono rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">Enter</kbd>
               select
             </span>
             <span className="flex items-center gap-1">

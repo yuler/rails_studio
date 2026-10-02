@@ -6,6 +6,7 @@ export type ShortcutContext = 'global' | 'tables' | 'sql' | 'console' | 'modal';
 
 export interface Chord {
   code: string;
+  /** Command on Mac, Ctrl on other platforms. */
   mod?: boolean;
   alt?: boolean;
   shift?: boolean;
@@ -64,7 +65,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   toggleTheme: {
     context: 'global',
-    chord: { code: 'KeyL', mod: true, shift: true },
+    chord: { code: 'KeyT' },
     description: 'Toggle light / dark theme',
     group: 'Global & Navigation'
   },
@@ -130,13 +131,13 @@ export const SHORTCUTS = defineShortcuts({
   },
   insertRow: {
     context: 'tables',
-    chord: { code: 'KeyI', mod: true },
+    chord: { code: 'KeyN' },
     description: 'Add a new row',
     group: 'Table Data Browser'
   },
   deleteRows: {
     context: 'tables',
-    chord: { code: 'Delete' },
+    chord: { code: 'KeyD' },
     description: 'Delete selected rows',
     group: 'Table Data Browser'
   },
@@ -148,19 +149,20 @@ export const SHORTCUTS = defineShortcuts({
   },
   discardChanges: {
     context: 'tables',
-    chord: { code: 'Delete', mod: true, shift: true },
+    chord: { code: 'KeyC', mod: true },
     description: 'Discard pending cell edits',
-    group: 'Table Data Browser'
+    group: 'Table Data Browser',
+    whenTyping: 'ignore'
   },
   refreshTable: {
     context: 'tables',
-    chord: { code: 'KeyR', mod: true, alt: true },
+    chord: { code: 'KeyR' },
     description: 'Refresh the current table',
     group: 'Table Data Browser'
   },
   toggleFilters: {
     context: 'tables',
-    chord: { code: 'KeyF', mod: true },
+    chord: { code: 'KeyF' },
     description: 'Toggle the column filter bar',
     group: 'Table Data Browser'
   },
@@ -173,19 +175,19 @@ export const SHORTCUTS = defineShortcuts({
   },
   clearFilters: {
     context: 'tables',
-    chord: { code: 'Backspace', mod: true, alt: true },
+    chord: { code: 'KeyX' },
     description: 'Clear all filters',
     group: 'Table Data Browser'
   },
   prevPage: {
     context: 'tables',
-    chord: { code: 'ArrowLeft', mod: true, alt: true },
+    chord: { code: 'BracketLeft' },
     description: 'Previous page',
     group: 'Table Data Browser'
   },
   nextPage: {
     context: 'tables',
-    chord: { code: 'ArrowRight', mod: true, alt: true },
+    chord: { code: 'BracketRight' },
     description: 'Next page',
     group: 'Table Data Browser'
   },
@@ -218,13 +220,13 @@ export const SHORTCUTS = defineShortcuts({
   },
   formatSql: {
     context: 'sql',
-    chord: { code: 'KeyF', mod: true, shift: true },
+    chord: { code: 'KeyF', mod: true, alt: true },
     description: 'Format SQL',
     group: 'SQL Runner'
   },
   newSqlTab: {
     context: 'sql',
-    chord: { code: 'KeyT', mod: true, alt: true },
+    chord: { code: 'KeyN', mod: true, alt: true },
     description: 'New SQL query tab',
     group: 'SQL Runner'
   },
@@ -236,7 +238,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   clearSql: {
     context: 'sql',
-    chord: { code: 'KeyX', mod: true, alt: true },
+    chord: { code: 'KeyN', mod: true, shift: true },
     description: 'Clear the SQL editor',
     group: 'SQL Runner'
   },
@@ -248,14 +250,14 @@ export const SHORTCUTS = defineShortcuts({
   },
   openStars: {
     context: 'sql',
-    chord: { code: 'KeyS', mod: true, alt: true },
-    description: 'Open starred SQL queries',
+    chord: { code: 'KeyL', mod: true, alt: true },
+    description: 'Open the starred SQL list',
     group: 'SQL Runner'
   },
   saveStar: {
     context: 'sql',
-    chord: { code: 'KeyS', mod: true, shift: true },
-    description: 'Save the current SQL to Stars',
+    chord: { code: 'KeyS', mod: true, alt: true },
+    description: 'Star the current SQL',
     group: 'SQL Runner'
   },
   copyJson: {
@@ -272,7 +274,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   deleteResultRows: {
     context: 'sql',
-    chord: { code: 'Delete' },
+    chord: { code: 'KeyD' },
     description: 'Delete selected result rows',
     group: 'SQL Runner'
   },
@@ -284,14 +286,15 @@ export const SHORTCUTS = defineShortcuts({
   },
   discardResultEdits: {
     context: 'sql',
-    chord: { code: 'Delete', mod: true, shift: true },
+    chord: { code: 'KeyC', mod: true },
     description: 'Discard pending result cell edits',
-    group: 'SQL Runner'
+    group: 'SQL Runner',
+    whenTyping: 'ignore'
   },
   sqlPane: {
     context: 'sql',
     chord: { code: 'Tab' },
-    description: 'Switch between the SQL editor and results',
+    description: 'Switch focus between the SQL editor, results, and the table list',
     group: 'SQL Runner',
     local: true
   },
@@ -330,7 +333,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   insertRecord: {
     context: 'modal',
-    chord: { code: 'Enter', mod: true },
+    chord: { code: 'KeyS', mod: true },
     description: 'Save the insert form',
     group: 'Table Data Browser'
   }
@@ -344,10 +347,14 @@ export function isMac(): boolean {
 }
 
 export function chordMatches(event: KeyboardEvent, chord: Chord): boolean {
-  const hasMod = event.metaKey || event.ctrlKey;
-  if (hasMod !== Boolean(chord.mod)) return false;
+  if ((event.metaKey || event.ctrlKey) !== Boolean(chord.mod)) return false;
   if (event.altKey !== Boolean(chord.alt)) return false;
-  if (event.shiftKey !== Boolean(chord.shift)) return false;
+  const letter = chord.code.startsWith('Key');
+  if (chord.shift) {
+    if (!event.shiftKey) return false;
+  } else if (event.shiftKey && !letter) {
+    return false;
+  }
   return event.code === chord.code;
 }
 
@@ -361,21 +368,21 @@ function keyLabel(chord: Chord): string {
   if (chord.code === 'Slash' && chord.shift) return '?';
   switch (chord.code) {
     case 'Enter':
-      return '↩';
+      return 'Enter';
     case 'Escape':
       return 'Esc';
     case 'Backspace':
-      return '⌫';
+      return 'Backspace';
     case 'Delete':
       return 'Delete';
     case 'ArrowLeft':
-      return '←';
+      return 'Left';
     case 'ArrowRight':
-      return '→';
+      return 'Right';
     case 'ArrowUp':
-      return '↑';
+      return 'Up';
     case 'ArrowDown':
-      return '↓';
+      return 'Down';
     case 'Space':
       return 'Space';
     case 'Tab':
@@ -397,18 +404,17 @@ function keyLabel(chord: Chord): string {
 
 export function shortcutKeyParts(id: ShortcutId): string[] {
   const chord = SHORTCUTS[id].chord;
-  const mac = isMac();
   const parts: string[] = [];
-  if (chord.alt) parts.push(mac ? '⌥' : 'Alt');
-  if (chord.mod) parts.push(mac ? '⌘' : 'Ctrl');
-  if (chord.shift) parts.push(mac ? '⇧' : 'Shift');
-  parts.push(keyLabel(chord));
+  if (chord.mod) parts.push(isMac() ? 'Cmd' : 'Ctrl');
+  if (chord.alt) parts.push('Alt');
+  const label = keyLabel(chord);
+  if (chord.shift && label !== '?') parts.push('Shift');
+  parts.push(label);
   return parts;
 }
 
 export function shortcutLabel(id: ShortcutId): string {
-  const parts = shortcutKeyParts(id);
-  return isMac() ? parts.join('') : parts.join('+');
+  return shortcutKeyParts(id).join('+');
 }
 
 export function shortcutGroups(): { title: string; ids: ShortcutId[] }[] {

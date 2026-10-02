@@ -8,6 +8,7 @@ interface SidebarProps {
   tables: TableMeta[];
   selectedTable: string | null;
   onSelectTable: (name: string) => void;
+  onQueryTable?: (name: string) => void;
   loading: boolean;
   onOpenCommandPalette?: () => void;
   navActive?: boolean;
@@ -18,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tables,
   selectedTable,
   onSelectTable,
+  onQueryTable,
   loading,
   onOpenCommandPalette,
   navActive = true,
@@ -49,9 +51,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     itemRefs.current.get(name)?.scrollIntoView({ block: 'nearest' });
   };
 
+  const activateTable = (name: string) => {
+    setHighlightedName(name);
+    onSelectTable(name);
+    onQueryTable?.(name);
+  };
+
   const confirmHighlight = () => {
     const tbl = filteredTables[cursorIndex];
-    if (tbl) onSelectTable(tbl.name);
+    if (!tbl) return;
+    activateTable(tbl.name);
   };
 
   useEffect(() => {
@@ -87,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable]);
+  }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable, onQueryTable, onSelectTable]);
 
   return (
     <aside
@@ -149,10 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (el) itemRefs.current.set(tbl.name, el);
                   else itemRefs.current.delete(tbl.name);
                 }}
-                onClick={() => {
-                  setHighlightedName(tbl.name);
-                  onSelectTable(tbl.name);
-                }}
+                onClick={() => activateTable(tbl.name)}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono transition-all text-left group ${
                   isSelected
                     ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border border-slate-200 dark:border-zinc-700/60'

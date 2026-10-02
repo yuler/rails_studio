@@ -26,16 +26,21 @@ import {
 } from './api';
 import { useTheme } from './theme';
 import { shortcutLabel } from './shortcuts';
+import { readStudioHash, replaceStudioHash } from './studioHash';
 import { ShortcutKeys } from './components/ShortcutKeys';
 import { isOverlayOpen, setShortcutSurface, useEscapeDismiss, useShortcut } from './useShortcut';
 
 export const App: React.FC = () => {
   const { toggleTheme } = useTheme();
+  const initialLocation = readStudioHash();
   const [databaseInfo, setDatabaseInfo] = useState<DatabaseInfo | undefined>();
   const [tables, setTables] = useState<TableMeta[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'tables' | 'sql'>('tables');
+  const [selectedTable, setSelectedTable] = useState<string | null>(initialLocation.table);
+  const [activeTab, setActiveTab] = useState<'tables' | 'sql'>(initialLocation.mode);
   const [sqlEditorFocusNonce, setSqlEditorFocusNonce] = useState(0);
+  const [sqlTableQuery, setSqlTableQuery] = useState<{ name: string; id: number } | null>(null);
+  const [sharedSql, setSharedSql] = useState(initialLocation.sql);
+  const [sqlSeedId, setSqlSeedId] = useState(0);
   const [navPane, setNavPane] = useState<'sidebar' | 'records'>('sidebar');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try {
@@ -107,15 +112,16 @@ export const App: React.FC = () => {
       const data = await fetchOverview();
       setDatabaseInfo(data.database);
       setTables(data.tables);
-      if (!selectedTable && data.tables.length > 0) {
-        setSelectedTable(data.tables[0].name);
-      }
+      setSelectedTable((current) => {
+        if (current && data.tables.some((table) => table.name === current)) return current;
+        return data.tables[0]?.name ?? null;
+      });
     } catch (err: any) {
       showToast(err.message || 'Failed to connect to database', 'error');
     } finally {
       setLoadingOverview(false);
     }
-  }, [selectedTable]);
+  }, []);
 
   useEffect(() => {
     loadOverview();
@@ -277,6 +283,28 @@ export const App: React.FC = () => {
     setShortcutSurface(activeTab);
   }, [activeTab]);
 
+  useEffect(() => {
+    replaceStudioHash({
+      mode: activeTab,
+      table: selectedTable,
+      sql: activeTab === 'sql' ? sharedSql : ''
+    });
+  }, [activeTab, selectedTable, sharedSql]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = readStudioHash();
+      setActiveTab(next.mode);
+      if (next.mode === 'tables' && next.table) setSelectedTable(next.table);
+      if (next.mode === 'sql') {
+        setSharedSql(next.sql);
+        setSqlSeedId((id) => id + 1);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   useEscapeDismiss();
   useShortcut('commandPalette', () => setCommandPaletteOpen((prev) => !prev), {
     accept: () => !isOverlayOpen() || commandPaletteOpen
@@ -296,9 +324,11 @@ export const App: React.FC = () => {
     if (stagedChanges.size > 0 && !savingChanges) void handleSaveChanges();
   });
   useShortcut('discardChanges', () => {
-    if (stagedChanges.size > 0 && !savingChanges) handleDiscardChanges();
+    if (!savingChanges) handleDiscardChanges();
+  }, stagedChanges.size > 0 && !savingChanges);
+  useShortcut('focusCycle', () => setNavPane((prev) => (prev === 'sidebar' ? 'records' : 'sidebar')), {
+    accept: () => activeTab === 'tables'
   });
-  useShortcut('focusCycle', () => setNavPane((prev) => (prev === 'sidebar' ? 'records' : 'sidebar')));
   useShortcut('focusSidebar', () => setNavPane('sidebar'));
   useShortcut('focusTable', () => setNavPane('records'));
 
@@ -335,12 +365,15 @@ export const App: React.FC = () => {
             tables={tables}
             selectedTable={selectedTable}
             onSelectTable={handleSelectTable}
+            onQueryTable={
+              activeTab === 'sql'
+                ? (name) => setSqlTableQuery({ name, id: Date.now() })
+                : undefined
+            }
             loading={loadingOverview}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            navActive={activeTab === 'tables' && navPane === 'sidebar'}
-            onActivate={() => {
-              if (activeTab === 'tables') setNavPane('sidebar');
-            }}
+            navActive={navPane === 'sidebar'}
+            onActivate={() => setNavPane('sidebar')}
           />
         )}
 
@@ -388,6 +421,13 @@ export const App: React.FC = () => {
           <SqlRunner
             tables={tables}
             editorFocusNonce={sqlEditorFocusNonce}
+            sidebarActive={navPane === 'sidebar'}
+            onFocusSidebar={() => setNavPane('sidebar')}
+            onFocusRunner={() => setNavPane('records')}
+            queryTable={sqlTableQuery}
+            initialSql={sharedSql}
+            sqlSeedId={sqlSeedId}
+            onSqlChange={setSharedSql}
             onOpenConsole={(cmd) => {
               setConsoleInitialCommand(cmd);
               setConsoleOpen(true);

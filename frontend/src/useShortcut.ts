@@ -80,13 +80,7 @@ function onKeyDown(event: KeyboardEvent) {
     const regs = registrations.get(id);
     if (!regs || regs.size === 0) continue;
     const accepted = [...regs].filter((reg) => reg.accept(event) && reg.enabled());
-    if (accepted.length === 0) {
-      if (shortcut.chord.mod || shortcut.chord.alt) {
-        event.preventDefault();
-        return;
-      }
-      continue;
-    }
+    if (accepted.length === 0) continue;
     event.preventDefault();
     event.stopPropagation();
     accepted.forEach((reg) => reg.handler());

@@ -34,6 +34,13 @@ interface SqlRunnerProps {
   tables: TableMeta[];
   editorFocusNonce?: number;
   onOpenConsole?: (initialCommand?: string) => void;
+  sidebarActive?: boolean;
+  onFocusSidebar?: () => void;
+  onFocusRunner?: () => void;
+  queryTable?: { name: string; id: number } | null;
+  initialSql?: string;
+  sqlSeedId?: number;
+  onSqlChange?: (sql: string) => void;
 }
 
 interface QueryTab {
@@ -75,17 +82,34 @@ const SQL_FUNCTIONS = [
   { name: 'CONCAT()', insert: 'CONCAT()', desc: 'Concatenate strings' }
 ];
 
-export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce = 0, onOpenConsole }) => {
+function selectPreviewSql(tableName: string): string {
+  const ident = /^[A-Za-z_][A-Za-z0-9_$]*$/.test(tableName)
+    ? tableName
+    : `"${tableName.replace(/"/g, '""')}"`;
+  return `SELECT * FROM ${ident} LIMIT 25;`;
+}
+
+export const SqlRunner: React.FC<SqlRunnerProps> = ({
+  tables,
+  editorFocusNonce = 0,
+  onOpenConsole,
+  sidebarActive = false,
+  onFocusSidebar,
+  onFocusRunner,
+  queryTable = null,
+  initialSql = '',
+  sqlSeedId = 0,
+  onSqlChange
+}) => {
   const kbdClass =
     'hidden sm:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500';
-  const firstTableName = tables[0]?.name || 'users';
 
   // Tabs state (Drizzle Studio multi-tab query runner)
   const [tabs, setTabs] = useState<QueryTab[]>([
     {
       id: 'tab-1',
       name: 'Query 1',
-      sql: `SELECT * FROM ${firstTableName} LIMIT 25;`,
+      sql: initialSql,
       result: null,
       error: null
     }
@@ -191,7 +215,15 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
     setTabs((prev) =>
       prev.map((t) => (t.id === activeTabId ? { ...t, sql: newSql } : t))
     );
+    onSqlChange?.(newSql);
   };
+
+  const appliedSqlSeed = useRef(0);
+  useEffect(() => {
+    if (!sqlSeedId || appliedSqlSeed.current === sqlSeedId) return;
+    appliedSqlSeed.current = sqlSeedId;
+    setSql(initialSql);
+  }, [sqlSeedId, initialSql]);
 
   const setResultAndError = (newResult: QueryResult | null, newError: string | null) => {
     setTabs((prev) =>
@@ -218,7 +250,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
     const newTab: QueryTab = {
       id: newId,
       name: `Query ${tabs.length + 1}`,
-      sql: `SELECT * FROM ${firstTableName} LIMIT 25;`,
+      sql: '',
       result: null,
       error: null
     };
@@ -238,7 +270,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
   };
 
   // Execute SQL
-  const handleRun = async (queryOverride?: string) => {
+  const handleRun = async (queryOverride?: string, options?: { focus?: boolean }) => {
     const queryToRun = (queryOverride || sql).trim();
     if (!queryToRun) return;
 
@@ -249,7 +281,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
       const res = await executeQuery(queryToRun);
       setResultAndError(res, null);
       setResultSelectedCount(0);
-      focusResults();
+      if (options?.focus !== false) focusResults();
     } catch (err: any) {
       const errorMsg = err.message || 'Query execution failed';
       setResultAndError(null, errorMsg);
@@ -257,6 +289,16 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
       setLoading(false);
     }
   };
+
+  const queriedTableId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!queryTable || queriedTableId.current === queryTable.id) return;
+    queriedTableId.current = queryTable.id;
+    const statement = selectPreviewSql(queryTable.name);
+    setSql(statement);
+    setShowSuggestions(false);
+    void handleRun(statement, { focus: false });
+  }, [queryTable]);
 
   // Format / Prettify SQL
   const handleFormat = () => {
@@ -540,12 +582,18 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
   useShortcut('clearSql', handleClear);
   useShortcut('toggleSplit', handleToggleSplit);
   useShortcut('openStars', () => setShowStars((prev) => !prev));
-  useShortcut('saveStar', openSaveStar);
+  useShortcut('saveStar', openSaveStar, {
+    accept: (event) => !(event.target instanceof Element && event.target.closest('[data-sql-results]'))
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (showStars || showSaveStar) return;
       if (!chordMatches(e, { code: 'Tab' })) return;
+      const typingElsewhere = e.target !== textareaRef.current && (e.target instanceof HTMLElement) && (
+        e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable
+      );
+      if (typingElsewhere) return;
       if (
         e.target === textareaRef.current &&
         showSuggestions &&
@@ -555,16 +603,23 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
       }
       e.preventDefault();
       e.stopPropagation();
-      if (pane === 'editor' || e.target === textareaRef.current) {
-        focusResults();
-      } else {
+      if (sidebarActive) {
+        onFocusRunner?.();
         focusEditor();
+        return;
       }
+      if (pane === 'editor' || e.target === textareaRef.current) {
+        onFocusRunner?.();
+        focusResults();
+        return;
+      }
+      textareaRef.current?.blur();
+      onFocusSidebar?.();
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pane, showSuggestions, suggestions.length, showStars, showSaveStar]);
+  }, [pane, showSuggestions, suggestions.length, showStars, showSaveStar, sidebarActive, onFocusSidebar, onFocusRunner]);
 
   // Export CSV
   const exportCSV = () => {
@@ -669,16 +724,36 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
           <button
             type="button"
             tabIndex={-1}
+            onClick={openSaveStar}
+            disabled={!sql.trim()}
+            className="px-2.5 py-1 text-xs font-mono rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/70 transition disabled:opacity-40 shadow-xs flex items-center space-x-1"
+            title={`Star current query (${shortcutLabel('saveStar')})`}
+          >
+            <Star
+              size={12}
+              className={
+                sql.trim() && stars.some((star) => star.sql.trim() === sql.trim())
+                  ? 'text-amber-500 fill-amber-500'
+                  : ''
+              }
+            />
+            <span className="hidden sm:inline">Star current</span>
+            <ShortcutKeys id="saveStar" className={kbdClass} />
+          </button>
+
+          <button
+            type="button"
+            tabIndex={-1}
             onClick={() => setShowStars(true)}
             className={`px-2.5 py-1 text-xs font-mono rounded-md border transition flex items-center space-x-1 shadow-xs ${
               showStars
                 ? 'bg-slate-200 dark:bg-zinc-800 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100'
                 : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800'
             }`}
-            title={`Starred queries (${shortcutLabel('openStars')})`}
+            title={`Starred SQL list (${shortcutLabel('openStars')})`}
           >
             <Star size={12} className={stars.length > 0 ? 'text-amber-500 fill-amber-500' : ''} />
-            <span className="hidden sm:inline">Stars</span>
+            <span className="hidden sm:inline">Stars list</span>
             <ShortcutKeys id="openStars" className={kbdClass} />
             {stars.length > 0 && (
               <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({stars.length})</span>
@@ -778,6 +853,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
               onFocus={() => {
                 setEditorFocused(true);
                 setPane('editor');
+                onFocusRunner?.();
               }}
               onBlur={() => setEditorFocused(false)}
               onKeyDown={handleEditorKeyDown}
@@ -842,7 +918,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
           {/* Status bar */}
           <div className="h-6 px-3 bg-slate-50 dark:bg-zinc-950 border-t border-slate-200 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 font-mono select-none">
             <div className="flex items-center space-x-2">
-              <span>Tab switches editor / results</span>
+              <span>Tab switches editor, results, and tables</span>
               <span>•</span>
               <span>{shortcutLabel('saveStar')} to star</span>
             </div>
@@ -857,8 +933,12 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
         {/* Results Area */}
         <div
           ref={resultsPaneRef}
+          data-sql-results
           tabIndex={-1}
-          onMouseDown={() => setPane('results')}
+          onMouseDown={() => {
+            setPane('results');
+            onFocusRunner?.();
+          }}
           className={`flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 outline-none ${
             splitMode === 'vertical' ? 'w-1/2' : 'h-[58%]'
           } ${pane === 'results' ? 'ring-1 ring-inset ring-slate-400 dark:ring-zinc-500' : ''}`}
@@ -1058,13 +1138,8 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({ tables, editorFocusNonce =
       <SqlStarsModal
         isOpen={showStars}
         stars={stars}
-        currentSql={sql}
         onClose={() => setShowStars(false)}
         onApply={handleApplyStar}
-        onStarCurrent={() => {
-          setShowStars(false);
-          openSaveStar();
-        }}
         onRemove={handleRemoveStar}
       />
 
