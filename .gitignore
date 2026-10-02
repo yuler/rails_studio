@@ -18,5 +18,8 @@ frontend/dist/
 .agents/skills/intro/audio/
 assets/intro-record.mp4
 
+# macOS
+.DS_Store
+
 # Worktrees
 .worktrees/
