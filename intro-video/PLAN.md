@@ -15,7 +15,7 @@ The README intro is a Framer-style launch video: narrative, motion, real product
 | Demo data   | Separate demo seed (18 users, 36 articles); test `seeds.rb` untouched             |
 | Theme       | Dark product UI on dark gradient, Rails red `#e11d48` accent; one theme toggle    |
 | Type/motion | Inter + JetBrains Mono; spring transitions, 3D tilt, shadow, glow                 |
-| Location    | `video/` (Remotion project + capture scripts); `mise intro:*` point here          |
+| Location    | `intro-video/` (Remotion project + capture scripts); `mise intro:*` point here    |
 | Publishing  | MP4 gitignored; upload via GitHub web UI, swap URL in README; commit poster only  |
 
 ## Storyboard
@@ -35,9 +35,9 @@ The README intro is a Framer-style launch video: narrative, motion, real product
 
 ## Pipeline
 
-1. `mise run intro:capture` — seed demo data, record one clip + still per scene into `video/public/capture/`.
+1. `mise run intro:capture` — seed demo data, record one clip + still per scene into `intro-video/public/capture/`.
 2. `mise run intro:studio` — Remotion Studio preview.
-3. `mise run intro:render` — render `video/out/intro.mp4` and `assets/intro-poster.jpg`.
+3. `mise run intro:render` — render `intro-video/out/intro.mp4` and `assets/intro-poster.jpg`.
 4. Upload MP4 on GitHub, update the README video URL.
 
 ## Open later

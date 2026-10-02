@@ -1,7 +1,7 @@
 # /// script
 # dependencies = ["numpy", "scipy"]
 # ///
-"""Synthesize the intro soundtrack and UI sound effects into video/public/audio/."""
+"""Synthesize the intro soundtrack and UI sound effects into intro-video/public/audio/."""
 
 from pathlib import Path
 

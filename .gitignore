@@ -14,10 +14,10 @@ frontend/node_modules/
 frontend/dist/
 
 # Intro
-video/node_modules/
-video/out/
-video/public/capture/
-video/public/audio/
+intro-video/node_modules/
+intro-video/out/
+intro-video/public/capture/
+intro-video/public/audio/
 
 # macOS
 .DS_Store

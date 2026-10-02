@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Demo data for the intro video. Run from test/dummy:
-#   bin/rails runner ../../video/capture/seed.rb
+#   bin/rails runner ../../intro-video/capture/seed.rb
 
 rng = Random.new(42)
 

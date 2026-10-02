@@ -39,27 +39,27 @@ run = "bin/rails test"
 
 [tasks."intro:seed"]
 description = "Load intro demo data into the dummy app (replaces its development data)"
-run = "cd test/dummy && bin/rails runner ../../video/capture/seed.rb"
+run = "cd test/dummy && bin/rails runner ../../intro-video/capture/seed.rb"
 
 [tasks."intro:capture"]
-description = "Record real UI clips with headless Chrome → video/public/capture/. SCENES=sql,fk to redo some."
+description = "Record real UI clips with headless Chrome → intro-video/public/capture/. SCENES=sql,fk to redo some."
 depends = ["intro:seed"]
 run = """
-pnpm --dir video install
-pnpm --dir video run capture
+pnpm --dir intro-video install
+pnpm --dir intro-video run capture
 """
 
 [tasks."intro:studio"]
 description = "Preview the intro in Remotion Studio"
 run = """
-pnpm --dir video run audio
-pnpm --dir video run studio
+pnpm --dir intro-video run audio
+pnpm --dir intro-video run studio
 """
 
 [tasks."intro:render"]
-description = "Synthesize music + SFX, render video/out/intro.mp4 and assets/intro-poster.jpg"
+description = "Synthesize music + SFX, render intro-video/out/intro.mp4 and assets/intro-poster.jpg"
 run = """
-pnpm --dir video run audio
-pnpm --dir video run render
-pnpm --dir video run poster
+pnpm --dir intro-video run audio
+pnpm --dir intro-video run render
+pnpm --dir intro-video run poster
 """
