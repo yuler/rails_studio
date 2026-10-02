@@ -32,7 +32,7 @@ import { isOverlayOpen, useOverlay, useShortcut } from '../useShortcut';
 import { ShortcutKeys } from './ShortcutKeys';
 import { ContextMenu, ContextMenuItem, copyToClipboard } from './ContextMenu';
 
-function formatForDateTimeLocal(val: any): string {
+export function formatForDateTimeLocal(val: any): string {
   if (!val) return '';
   const str = String(val).trim();
   try {
@@ -55,7 +55,7 @@ function formatForDateTimeLocal(val: any): string {
   return str;
 }
 
-function formatForDate(val: any): string {
+export function formatForDate(val: any): string {
   if (!val) return '';
   const str = String(val).trim();
   try {
@@ -68,7 +68,7 @@ function formatForDate(val: any): string {
   return str.split('T')[0].split(' ')[0];
 }
 
-function formatForTime(val: any): string {
+export function formatForTime(val: any): string {
   if (!val) return '';
   const str = String(val).trim();
   if (str.includes(' ')) {

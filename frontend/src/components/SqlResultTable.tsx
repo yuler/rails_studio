@@ -1,8 +1,11 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Check, Save, Undo2 } from 'lucide-react';
+import { Check, Copy, Edit2, FileJson, Link2, Save, Trash2, Undo2 } from 'lucide-react';
 import { getConfig, saveBatch } from '../api';
 import { ColumnMeta, StagedChange, TableSchema } from '../types';
 import { BooleanToggle, coerceBoolean } from './BooleanToggle';
+import { ContextMenu, ContextMenuItem, copyToClipboard } from './ContextMenu';
+import { ForeignKeySelect } from './ForeignKeySelect';
+import { formatForDate, formatForDateTimeLocal, formatForTime } from './TableView';
 import { chordMatches, shortcutLabel } from '../shortcuts';
 import { isOverlayOpen, useShortcut } from '../useShortcut';
 import { ShortcutKeys } from './ShortcutKeys';
@@ -18,6 +21,7 @@ interface SqlResultTableProps {
   onActivate?: () => void;
   onSelectedChange?: (count: number) => void;
   onRowsChange: (rows: any[][]) => void;
+  onOpenForeignKey?: (targetTable: string, targetId: any) => void;
 }
 
 export interface SqlResultTableHandle {
@@ -48,7 +52,8 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
     navActive = false,
     onActivate,
     onSelectedChange,
-    onRowsChange
+    onRowsChange,
+    onOpenForeignKey
   },
   ref
 ) {
@@ -66,7 +71,15 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  const editInitialRef = useRef('');
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    row: any[];
+    rowId: string;
+    column?: string;
+  } | null>(null);
 
   useEffect(() => {
     setSelectedRowIds(new Set());
@@ -78,7 +91,7 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
   useEffect(() => {
     if (editingCell && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select();
+      if (inputRef.current instanceof HTMLInputElement && ['text', 'number'].includes(inputRef.current.type)) inputRef.current.select();
     }
   }, [editingCell?.rowId, editingCell?.column]);
 
@@ -135,15 +148,21 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
       return;
     }
 
+    let initial = current === null || current === undefined ? '' : String(current);
+    if (meta?.type === 'datetime' || meta?.type === 'timestamp') initial = formatForDateTimeLocal(current);
+    else if (meta?.type === 'date') initial = formatForDate(current);
+    else if (meta?.type === 'time') initial = formatForTime(current);
+
     setEditingCell({ rowId, column });
-    setEditValue(current === null || current === undefined ? '' : String(current));
+    setEditValue(initial);
+    editInitialRef.current = initial;
   };
 
   const handleCommitEdit = () => {
     if (!editingCell) return;
     const { rowId, column } = editingCell;
     const row = rows.find((r) => rowIdOf(columns, r, primaryKeys) === rowId);
-    if (!row) {
+    if (!row || editValue === editInitialRef.current) {
       setEditingCell(null);
       return;
     }
@@ -217,25 +236,25 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navActive, filteredRows, focusedRowIndex, editingCell, selectedRowIds, editable, columns, primaryKeys]);
 
-  const handleDelete = async () => {
-    if (!editable || !tableName || selectedRowIds.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedRowIds.size} records? This action cannot be undone.`)) {
+  const handleDelete = async (ids: Set<string> = selectedRowIds) => {
+    if (!editable || !tableName || ids.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${ids.size} records? This action cannot be undone.`)) {
       return;
     }
     try {
-      await saveBatch(tableName, { deletes: Array.from(selectedRowIds) });
-      const remaining = rows.filter((row) => !selectedRowIds.has(rowIdOf(columns, row, primaryKeys)));
+      await saveBatch(tableName, { deletes: Array.from(ids) });
+      const remaining = rows.filter((row) => !ids.has(rowIdOf(columns, row, primaryKeys)));
       onRowsChange(remaining);
       setSelectedRowIds(new Set());
       setStagedChanges((prev) => {
         const next = new Map(prev);
         Array.from(next.keys()).forEach((key) => {
           const id = key.slice(0, key.lastIndexOf(':'));
-          if (selectedRowIds.has(id)) next.delete(key);
+          if (ids.has(id)) next.delete(key);
         });
         return next;
       });
-      showNotice(`Deleted ${selectedRowIds.size} records`);
+      showNotice(`Deleted ${ids.size} records`);
     } catch (err: any) {
       showNotice(err.message || 'Failed to delete records');
     }
@@ -249,8 +268,96 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
   }, [selectedRowIds, onSelectedChange, editable]);
 
   useImperativeHandle(ref, () => ({
-    deleteSelected: handleDelete
+    deleteSelected: () => handleDelete()
   }));
+
+  const handleRowContextMenu = (e: React.MouseEvent, row: any[], rowIdx: number, column?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onActivate?.();
+    setFocusedRowIndex(rowIdx);
+    const rowId = rowIdOfRow(row, rowIdx);
+    if (!selectedRowIds.has(rowId)) setSelectedRowIds(new Set([rowId]));
+    setContextMenu({ x: e.clientX, y: e.clientY, row, rowId, column });
+  };
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu
+    ? (() => {
+        const { row, rowId, column } = contextMenu;
+        const cellIdx = column ? columns.indexOf(column) : -1;
+        const valueOf = (col: string, idx: number) => {
+          const staged = stagedChanges.get(`${rowId}:${col}`);
+          return staged ? staged.newValue : row[idx];
+        };
+        const meta = column ? columnMeta(column) : undefined;
+        const cellVal = column ? valueOf(column, cellIdx) : undefined;
+        const isAutoPk = Boolean(column && primaryKeys.includes(column) && (meta?.type === 'integer' || column === 'id'));
+        const canEdit = editable && Boolean(column) && !isAutoPk;
+        const targetIds = selectedRowIds.has(rowId) ? new Set(selectedRowIds) : new Set([rowId]);
+
+        const items: ContextMenuItem[] = [
+          {
+            id: 'edit-cell',
+            label: 'Edit Cell',
+            icon: <Edit2 size={13} />,
+            shortcut: '↵',
+            disabled: !canEdit,
+            onClick: () => {
+              if (column && canEdit) handleStartEdit(rowId, column, row[cellIdx]);
+            }
+          },
+          {
+            id: 'copy-cell',
+            label: 'Copy Cell Value',
+            icon: <Copy size={13} />,
+            disabled: !column,
+            onClick: async () => {
+              const ok = await copyToClipboard(cellVal === null || cellVal === undefined ? '' : String(cellVal));
+              if (ok) showNotice('Copied cell value to clipboard');
+            }
+          },
+          {
+            id: 'copy-row-json',
+            label: 'Copy Row as JSON',
+            icon: <FileJson size={13} />,
+            onClick: async () => {
+              const rowObj: Record<string, any> = {};
+              columns.forEach((c, i) => {
+                rowObj[c] = valueOf(c, i);
+              });
+              const ok = await copyToClipboard(JSON.stringify(rowObj, null, 2));
+              if (ok) showNotice('Copied row as JSON to clipboard');
+            }
+          }
+        ];
+
+        if (meta?.foreign_key && cellVal !== null && cellVal !== undefined && cellVal !== '') {
+          const targetTable = meta.foreign_key.to_table;
+          items.push({
+            id: 'go-foreign-key',
+            label: `Go to ${targetTable} (${cellVal})`,
+            icon: <Link2 size={13} />,
+            onClick: () => onOpenForeignKey?.(targetTable, cellVal)
+          });
+        }
+
+        if (editable) {
+          items.push(
+            { separator: true },
+            {
+              id: 'delete-rows',
+              label: targetIds.size > 1 ? `Delete ${targetIds.size} Rows` : 'Delete Row',
+              icon: <Trash2 size={13} />,
+              shortcut: shortcutLabel('deleteResultRows'),
+              danger: true,
+              onClick: () => void handleDelete(targetIds)
+            }
+          );
+        }
+
+        return items;
+      })()
+    : [];
 
   const handleSave = async () => {
     if (!editable || !tableName || stagedChanges.size === 0) return;
@@ -286,35 +393,96 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
     accept: inResults
   });
 
-  const renderCell = (row: any[], rowId: string, col: string, cellIdx: number) => {
+  const renderCell = (row: any[], rowId: string, col: string, cellIdx: number, displayOnly = false) => {
     const originalVal = row[cellIdx];
     const staged = stagedChanges.get(`${rowId}:${col}`);
     const displayVal = staged ? staged.newValue : originalVal;
     const meta = columnMeta(col);
-    const isEditing = editingCell?.rowId === rowId && editingCell?.column === col;
+    const isEditing = !displayOnly && editingCell?.rowId === rowId && editingCell?.column === col;
     const isPk = primaryKeys.includes(col);
     const isAutoPk = isPk && (meta?.type === 'integer' || col === 'id');
 
-    if (isEditing) {
+    const editorClass =
+      'w-full h-full bg-white dark:bg-zinc-900 border-2 border-blue-500 dark:border-blue-400 px-2 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none font-mono shadow-xs';
+    const editorKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleCommitEdit();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setEditingCell(null);
+      }
+    };
+
+    if (isEditing && meta?.foreign_key) {
       return (
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleCommitEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleCommitEdit();
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              setEditingCell(null);
-            }
-          }}
-          className="w-full h-full min-w-[8rem] bg-white dark:bg-zinc-900 border-2 border-blue-500 px-2 py-1 text-xs font-mono text-slate-900 dark:text-zinc-100 focus:outline-none"
-        />
+        <div className="absolute inset-0 w-full h-full flex items-center z-20">
+          <div className="w-full h-full min-w-[200px]">
+          <ForeignKeySelect
+            targetTable={meta.foreign_key.to_table}
+            value={editValue}
+            onChange={(next) => {
+              const parsed =
+                meta.type === 'integer' && next !== null && next !== '' ? parseInt(String(next), 10) : next;
+              setEditValue(next === null || next === undefined ? '' : String(next));
+              stageChange(rowId, col, originalVal, parsed === '' ? null : parsed);
+            }}
+            isNullable={meta.null}
+            onCommit={() => setEditingCell(null)}
+            onCancel={() => setEditingCell(null)}
+            inline
+            autoFocus
+          />
+          </div>
+        </div>
+      );
+    }
+
+    if (isEditing) {
+      const type = meta?.type;
+      return (
+        <div className="absolute inset-0 w-full h-full flex items-center z-20">
+          {meta?.enum_values && meta.enum_values.length > 0 ? (
+            <select
+              ref={inputRef as React.RefObject<HTMLSelectElement>}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleCommitEdit}
+              onKeyDown={editorKeyDown}
+              className={editorClass}
+            >
+              {meta.null && <option value="">(null)</option>}
+              {meta.enum_values.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type={
+                type === 'datetime' || type === 'timestamp'
+                  ? 'datetime-local'
+                  : type === 'date'
+                  ? 'date'
+                  : type === 'time'
+                  ? 'time'
+                  : type === 'integer' || type === 'float' || type === 'decimal'
+                  ? 'number'
+                  : 'text'
+              }
+              step={type === 'integer' ? '1' : type === 'float' || type === 'decimal' ? 'any' : undefined}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleCommitEdit}
+              onKeyDown={editorKeyDown}
+              className={editorClass}
+            />
+          )}
+        </div>
       );
     }
 
@@ -329,6 +497,25 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
 
     if (displayVal === null || displayVal === undefined) {
       return <span className="text-slate-400 dark:text-zinc-600 italic">null</span>;
+    }
+
+    if (meta?.foreign_key) {
+      const targetTable = meta.foreign_key.to_table;
+      return (
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenForeignKey?.(targetTable, displayVal);
+          }}
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:border-blue-800/60 dark:text-blue-300 dark:hover:bg-blue-900/60 transition text-xs"
+        >
+          <Link2 size={10} />
+          <span>{targetTable} #{String(displayVal)}</span>
+          <span className="text-[10px] text-blue-500 dark:text-blue-400">↗</span>
+        </button>
+      );
     }
 
     if (typeof displayVal === 'boolean' || meta?.type === 'boolean') {
@@ -407,7 +594,12 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
                 key={col}
                 className="p-2.5 text-slate-700 dark:text-zinc-300 font-medium text-xs border-r border-b border-slate-200 dark:border-zinc-800/80 whitespace-nowrap"
               >
-                {col}
+                <span className="inline-flex items-center gap-1.5">
+                  {columnMeta(col)?.foreign_key && (
+                    <Link2 size={12} className="text-blue-500 dark:text-blue-400 shrink-0" />
+                  )}
+                  {col}
+                </span>
               </th>
             ))}
           </tr>
@@ -421,6 +613,7 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
               <tr
                 key={`${rowId}-${rowIdx}`}
                 data-sql-row-focus={isRowFocused ? 'true' : undefined}
+                onContextMenu={(e) => handleRowContextMenu(e, row, rowIdx)}
                 onClick={() => {
                   setFocusedRowIndex(rowIdx);
                   onActivate?.();
@@ -447,14 +640,21 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
                   const meta = columnMeta(col);
                   const isAutoPk =
                     primaryKeys.includes(col) && (meta?.type === 'integer' || col === 'id');
+                  const isEditing = editingCell?.rowId === rowId && editingCell?.column === col;
                   return (
                     <td
                       key={col}
-                      onDoubleClick={() => !isAutoPk && handleStartEdit(rowId, col, cell)}
-                      className={`p-2.5 text-slate-800 dark:text-zinc-200 border-r border-slate-100 dark:border-zinc-800/40 whitespace-nowrap max-w-sm truncate ${
+                      onDoubleClick={() => !isAutoPk && !isEditing && handleStartEdit(rowId, col, cell)}
+                      onContextMenu={(e) => !isEditing && handleRowContextMenu(e, row, rowIdx, col)}
+                      className={`relative p-2.5 text-slate-800 dark:text-zinc-200 border-r border-slate-100 dark:border-zinc-800/40 whitespace-nowrap max-w-sm truncate ${
                         editable && !isAutoPk ? 'cursor-cell' : 'select-text'
                       } ${staged ? 'bg-amber-50 dark:bg-amber-950/20 ring-1 ring-inset ring-amber-400' : ''}`}
                     >
+                      {isEditing && (
+                        <span className="invisible" aria-hidden>
+                          {renderCell(row, rowId, col, cellIdx, true)}
+                        </span>
+                      )}
                       {renderCell(row, rowId, col, cellIdx)}
                     </td>
                   );
@@ -474,6 +674,15 @@ export const SqlResultTable = forwardRef<SqlResultTableHandle, SqlResultTablePro
           )}
         </tbody>
       </table>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 });

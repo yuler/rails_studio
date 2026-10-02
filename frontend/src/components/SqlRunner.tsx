@@ -41,6 +41,7 @@ interface SqlRunnerProps {
   initialSql?: string;
   sqlSeedId?: number;
   onSqlChange?: (sql: string) => void;
+  onOpenForeignKey?: (targetTable: string, targetId: any) => void;
 }
 
 interface QueryTab {
@@ -99,7 +100,8 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
   queryTable = null,
   initialSql = '',
   sqlSeedId = 0,
-  onSqlChange
+  onSqlChange,
+  onOpenForeignKey
 }) => {
   const kbdClass =
     'hidden sm:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500';
@@ -1103,6 +1105,7 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
                 navActive={pane === 'results'}
                 onActivate={() => setPane('results')}
                 onSelectedChange={setResultSelectedCount}
+                onOpenForeignKey={onOpenForeignKey}
                 onRowsChange={(nextRows) => {
                   setResultAndError({ ...result, rows: nextRows, count: nextRows.length }, null);
                 }}
