@@ -316,6 +316,7 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
   return (
     <div
+      data-shortcut-scope="console"
       className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-200 border-t ${
         isOpen
           ? isExpanded
@@ -367,11 +368,11 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
               <button
                 onClick={() => setHistory([])}
-                className="p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition"
+                className="p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-200/70 dark:hover:bg-zinc-800 transition flex items-center gap-1.5"
                 title={`Clear console output (${shortcutLabel('clearConsole')})`}
               >
                 <Trash2 size={13} />
-                <ShortcutKeys id="clearConsole" className="hidden lg:inline text-[9px] font-mono text-slate-400" />
+                <ShortcutKeys id="clearConsole" className="hidden lg:inline-flex px-1 py-0.5 text-[9px] font-mono rounded border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500" />
               </button>
 
               <button
@@ -510,7 +511,6 @@ export const RailsConsole: React.FC<RailsConsoleProps> = ({
 
           {/* Terminal Input Bar */}
           <form
-            data-shortcut-scope="console"
             onSubmit={handleSubmit}
             className="h-10 px-3 border-t border-slate-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/90 flex items-center space-x-2"
           >

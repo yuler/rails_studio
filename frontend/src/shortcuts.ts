@@ -19,13 +19,15 @@ export interface ShortcutDefinition {
   group: 'Global & Navigation' | 'Table Data Browser' | 'SQL Runner' | 'Rails Console';
   /** Bare keys are ignored while typing. Modifier chords are allowed. */
   whenTyping?: 'allow' | 'ignore';
-  /** Runs while a modal or drawer is open. */
+  /** Also active while a modal or drawer overlay is open. */
   throughOverlay?: boolean;
-  /** Documented here, but a local listener owns the event. */
+  /** Registry documents the chord, but a component-local listener handles it; the global dispatcher skips it. */
   local?: boolean;
 }
 
-function defineShortcuts<const T extends Record<string, ShortcutDefinition>>(
+// Widen each entry to ShortcutDefinition while keeping literal keys,
+// so SHORTCUTS[id].chord.mod etc. type-check without narrowing.
+function defineShortcuts<T extends Record<string, ShortcutDefinition>>(
   defs: T
 ): { [K in keyof T]: ShortcutDefinition } {
   return defs;
@@ -59,7 +61,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   toggleConsole: {
     context: 'global',
-    chord: { code: 'Backquote', mod: true },
+    chord: { code: 'Backquote', mod: true, alt: true },
     description: 'Toggle Rails Console',
     group: 'Global & Navigation'
   },
@@ -238,7 +240,7 @@ export const SHORTCUTS = defineShortcuts({
   },
   clearSql: {
     context: 'sql',
-    chord: { code: 'KeyN', mod: true, shift: true },
+    chord: { code: 'KeyK', mod: true, alt: true },
     description: 'Clear the SQL editor',
     group: 'SQL Runner'
   },
@@ -352,8 +354,10 @@ export function chordMatches(event: KeyboardEvent, chord: Chord): boolean {
   const letter = chord.code.startsWith('Key');
   if (chord.shift) {
     if (!event.shiftKey) return false;
-  } else if (event.shiftKey && !letter) {
-    return false;
+  } else if (event.shiftKey) {
+    // Bare letter keys tolerate Shift so Shift+N still opens a new row,
+    // but mod/alt chords must match Shift exactly.
+    if (chord.mod || chord.alt || !letter) return false;
   }
   return event.code === chord.code;
 }

@@ -27,7 +27,7 @@ import { QueryResult, TableMeta, ConsoleModelMeta, TableSchema } from '../types'
 import { SqlResultTable, SqlResultTableHandle } from './SqlResultTable';
 import { SqlStarsModal, StarredQuery } from './SqlStarsModal';
 import { chordMatches, shortcutLabel } from '../shortcuts';
-import { useOverlay, useShortcut } from '../useShortcut';
+import { useOverlay, useShortcut, useShortcuts } from '../useShortcut';
 import { ShortcutKeys } from './ShortcutKeys';
 
 interface SqlRunnerProps {
@@ -178,13 +178,13 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
 
   const focusEditor = () => {
     setPane('editor');
-    textareaRef.current?.focus();
+    textareaRef.current?.focus({ preventScroll: true });
   };
 
   const focusResults = () => {
     setPane('results');
     textareaRef.current?.blur();
-    resultsPaneRef.current?.focus();
+    resultsPaneRef.current?.focus({ preventScroll: true });
   };
 
   useEffect(() => {
@@ -572,19 +572,28 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
   }, [showStars, showSaveStar]);
 
   useOverlay(showStars || showSaveStar);
-  useShortcut('runSql', () => {
-    setShowSuggestions(false);
-    void handleRun();
-  });
-  useShortcut('formatSql', handleFormat);
-  useShortcut('newSqlTab', handleAddTab);
-  useShortcut('closeSqlTab', () => handleCloseTab(activeTabId), tabs.length > 1);
-  useShortcut('clearSql', handleClear);
-  useShortcut('toggleSplit', handleToggleSplit);
-  useShortcut('openStars', () => setShowStars((prev) => !prev));
-  useShortcut('saveStar', openSaveStar, {
-    accept: (event) => !(event.target instanceof Element && event.target.closest('[data-sql-results]'))
-  });
+  useShortcuts([
+    {
+      id: 'runSql',
+      handler: () => {
+        setShowSuggestions(false);
+        void handleRun();
+      }
+    },
+    { id: 'formatSql', handler: handleFormat },
+    { id: 'newSqlTab', handler: handleAddTab },
+    { id: 'closeSqlTab', handler: () => handleCloseTab(activeTabId), enabled: tabs.length > 1 },
+    { id: 'clearSql', handler: handleClear },
+    { id: 'toggleSplit', handler: handleToggleSplit },
+    { id: 'openStars', handler: () => setShowStars((prev) => !prev) },
+    {
+      id: 'saveStar',
+      handler: openSaveStar,
+      enabled: {
+        accept: (event) => !(event.target instanceof Element && event.target.closest('[data-sql-results]'))
+      }
+    }
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -818,21 +827,22 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
         {/* Editor Area */}
         <div
           ref={editorContainerRef}
-          onMouseDown={() => setPane('editor')}
+          onMouseDown={() => {
+            setPane('editor');
+            onFocusRunner?.();
+          }}
           className={`flex flex-col relative overflow-hidden bg-white dark:bg-zinc-950 ${
             splitMode === 'vertical'
               ? 'w-1/2 border-r border-slate-200 dark:border-zinc-800'
               : 'h-[42%] border-b border-slate-200 dark:border-zinc-800'
+          } ${
+            !sidebarActive && pane === 'editor'
+              ? 'shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]'
+              : ''
           }`}
         >
           {/* Textarea + Line Numbers Gutter */}
-          <div
-            className={`flex-1 flex overflow-hidden relative font-mono text-xs transition-shadow ${
-              pane === 'editor'
-                ? 'ring-1 ring-inset ring-slate-400 dark:ring-zinc-500'
-                : ''
-            }`}
-          >
+          <div className="flex-1 flex overflow-hidden relative font-mono text-xs">
             {/* Line numbers */}
             <div
               ref={lineNumbersRef}
@@ -939,9 +949,13 @@ export const SqlRunner: React.FC<SqlRunnerProps> = ({
             setPane('results');
             onFocusRunner?.();
           }}
-          className={`flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 outline-none ${
+          className={`relative flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 outline-none ${
             splitMode === 'vertical' ? 'w-1/2' : 'h-[58%]'
-          } ${pane === 'results' ? 'ring-1 ring-inset ring-slate-400 dark:ring-zinc-500' : ''}`}
+          } ${
+            !sidebarActive && pane === 'results'
+              ? 'shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]'
+              : ''
+          }`}
         >
           {/* Results Bar */}
           <div className="h-10 px-3 bg-slate-50/80 dark:bg-zinc-900/40 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between text-xs font-mono text-slate-600 dark:text-zinc-400 shrink-0 gap-2">

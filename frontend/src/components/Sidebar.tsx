@@ -100,7 +100,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className="w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none transition-colors"
+      className={`relative w-64 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 flex flex-col h-full min-h-0 select-none ${
+        navActive ? 'shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]' : ''
+      }`}
       data-shortcut-scope="sidebar"
       onMouseDown={() => onActivate?.()}
     >
@@ -159,14 +161,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   else itemRefs.current.delete(tbl.name);
                 }}
                 onClick={() => activateTable(tbl.name)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono transition-all text-left group ${
+                className={`relative w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono text-left group border ${
                   isSelected
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border border-slate-200 dark:border-zinc-700/60'
+                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border-slate-200 dark:border-zinc-700/60'
                     : isHighlighted
-                    ? 'bg-slate-200/70 dark:bg-zinc-800/60 text-slate-900 dark:text-zinc-100 border border-slate-300 dark:border-zinc-600'
-                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 hover:text-slate-900 dark:hover:text-zinc-200 border border-transparent'
-                } ${isHighlighted && navActive ? 'outline outline-1 -outline-offset-1 outline-slate-400 dark:outline-zinc-500' : ''}`}
+                    ? 'bg-slate-200/70 dark:bg-zinc-800/60 text-slate-900 dark:text-zinc-100 border-slate-300 dark:border-zinc-600'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 hover:text-slate-900 dark:hover:text-zinc-200 border-transparent'
+                }`}
               >
+                {isHighlighted && navActive && (
+                  <span className="pointer-events-none absolute inset-0 rounded-md shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]" />
+                )}
                 <div className="flex items-center space-x-2 truncate">
                   <Table
                     size={14}

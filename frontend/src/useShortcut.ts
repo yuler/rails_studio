@@ -25,11 +25,12 @@ interface Dismisser {
 const registrations = new Map<ShortcutId, Set<Registration>>();
 const dismissers: Dismisser[] = [];
 let overlayCount = 0;
-let surface: 'tables' | 'sql' = 'tables';
+// Active data surface when focus is on body (no scoped element focused).
+let activeSurface: 'tables' | 'sql' = 'tables';
 let listening = false;
 
 export function setShortcutSurface(next: 'tables' | 'sql') {
-  surface = next;
+  activeSurface = next;
 }
 
 export function isOverlayOpen(): boolean {
@@ -58,7 +59,7 @@ function contextActive(context: ShortcutContext): boolean {
   if (scope === 'sql') return context === 'sql';
   if (scope === 'tables' || scope === 'sidebar') return context === 'tables';
   if (context === 'console') return false;
-  return context === surface;
+  return context === activeSurface;
 }
 
 function onKeyDown(event: KeyboardEvent) {
@@ -129,6 +130,60 @@ export function useShortcut(
       set!.delete(reg);
     };
   }, [id]);
+}
+
+/**
+ * Register several shortcuts from one call site so a new action only needs
+ * a registry entry plus one entry here (instead of N `useShortcut` calls).
+ * Ids should be static; handlers and enabled flags resolve live each keypress.
+ */
+export function useShortcuts(
+  entries: Array<{
+    id: ShortcutId;
+    handler: Handler;
+    enabled?: boolean | { enabled?: boolean; accept?: (event: KeyboardEvent) => boolean };
+  }>
+) {
+  const liveRef = useRef(entries);
+  liveRef.current = entries;
+  const idsKey = entries.map((entry) => entry.id).join(',');
+
+  useEffect(() => {
+    ensureListener();
+    const ids = liveRef.current.map((entry) => entry.id);
+    const regs: Array<{ id: ShortcutId; reg: Registration }> = ids.map((id) => {
+      const reg: Registration = {
+        enabled: () => {
+          const found = liveRef.current.find((item) => item.id === id);
+          const flag = found?.enabled ?? true;
+          return typeof flag === 'boolean' ? flag : (flag.enabled !== false);
+        },
+        accept: (event) => {
+          const found = liveRef.current.find((item) => item.id === id);
+          const flag = found?.enabled;
+          const accept = typeof flag === 'object' ? flag.accept : undefined;
+          return accept ? accept(event) : true;
+        },
+        handler: () => {
+          liveRef.current.find((item) => item.id === id)?.handler();
+        }
+      };
+      let set = registrations.get(id);
+      if (!set) {
+        set = new Set();
+        registrations.set(id, set);
+      }
+      set.add(reg);
+      return { id, reg };
+    });
+    return () => {
+      for (const { id, reg } of regs) {
+        registrations.get(id)?.delete(reg);
+      }
+    };
+    // Re-subscribe only when the id set changes; handlers resolve via liveRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 }
 
 export function useOverlay(active: boolean) {
