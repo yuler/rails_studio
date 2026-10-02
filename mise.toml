@@ -19,11 +19,15 @@ run = "pnpm --dir frontend run build:watch"
 
 [tasks."dev:rails"]
 description = "Start Rails test server"
-run = "cd test/dummy && bin/rails server -p 3000"
+run = "cd test/dummy && bin/rails server -p ${PORT:-3000}"
 
 [tasks.dev]
 description = "Start development server and watch frontend assets"
 depends = ["dev:frontend", "dev:rails"]
+
+[tasks."db:reset"]
+description = "Drop, recreate, and reseed the dummy app database"
+run = "cd test/dummy && bin/rails db:reset"
 
 [tasks.build]
 description = "Compile frontend assets into public/assets/"

@@ -286,6 +286,19 @@ module RailsStudio
       true
     end
 
+    def truncate!
+      ensure_writable!
+      connection.truncate(name)
+      true
+    end
+
+    def drop!
+      ensure_writable!
+      connection.drop_table(name)
+      self.class.clear_cache!
+      true
+    end
+
     def batch_process(updates: [], creates: [], deletes: [])
       ensure_writable!
       model = dynamic_model

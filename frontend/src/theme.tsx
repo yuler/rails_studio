@@ -138,9 +138,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (root.classList.contains('theme-transitioning')) return;
     root.classList.add('theme-transitioning');
     if (goingDark) root.classList.add('theme-reveal-old');
-    root.style.setProperty('--vt-x', `${x}px`);
-    root.style.setProperty('--vt-y', `${y}px`);
-    root.style.setProperty('--vt-r', `${endRadius}px`);
+    // Percentages, not px: some Chrome setups size the view-transition snapshot
+    // box at 2x and scale it down, so px origins land at half (top center).
+    const w = Math.max(window.innerWidth, 1);
+    const h = Math.max(window.innerHeight, 1);
+    root.style.setProperty('--vt-x', `${(x / w) * 100}%`);
+    root.style.setProperty('--vt-y', `${(y / h) * 100}%`);
+    root.style.setProperty('--vt-r', `${(endRadius / (Math.hypot(w, h) / Math.SQRT2)) * 100}%`);
     root.style.setProperty('--vt-bg', goingDark ? '#f8fafc' : '#09090b');
     root.style.colorScheme = goingDark ? 'light' : 'dark';
     void root.offsetWidth;

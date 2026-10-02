@@ -1,18 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Table, Search, Key, Link2, Layers } from 'lucide-react';
+import { Table, Search, Key, Link2, Layers, Terminal, Copy, Eraser, Trash2 } from 'lucide-react';
+import { dropTable, getConfig, truncateTable } from '../api';
 import { TableMeta } from '../types';
 import { chordMatches, shortcutLabel } from '../shortcuts';
 import { isOverlayOpen } from '../useShortcut';
+import { ContextMenu, ContextMenuItem, copyToClipboard } from './ContextMenu';
 
 interface SidebarProps {
   tables: TableMeta[];
   selectedTable: string | null;
   onSelectTable: (name: string) => void;
   onQueryTable?: (name: string) => void;
+  queryOnSelect?: boolean;
   loading: boolean;
   onOpenCommandPalette?: () => void;
   navActive?: boolean;
   onActivate?: () => void;
+  onTableMutated?: (tableName: string) => void;
+  onShowToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -20,13 +25,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedTable,
   onSelectTable,
   onQueryTable,
+  queryOnSelect = false,
   loading,
   onOpenCommandPalette,
   navActive = true,
-  onActivate
+  onActivate,
+  onTableMutated,
+  onShowToast
 }) => {
   const [search, setSearch] = useState('');
   const [highlightedName, setHighlightedName] = useState<string | null>(selectedTable);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; table: TableMeta } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
@@ -54,7 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activateTable = (name: string) => {
     setHighlightedName(name);
     onSelectTable(name);
-    onQueryTable?.(name);
+    if (queryOnSelect) onQueryTable?.(name);
   };
 
   const confirmHighlight = () => {
@@ -97,6 +106,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navActive, filteredTables, cursorIndex, highlightedName, selectedTable, onQueryTable, onSelectTable]);
+
+  const runTableMutation = async (name: string, action: 'truncate' | 'drop') => {
+    const prompt =
+      action === 'truncate'
+        ? `Delete ALL rows from "${name}"? This cannot be undone.`
+        : `Drop table "${name}" and all its data? This cannot be undone.`;
+    if (!confirm(prompt)) return;
+    try {
+      await (action === 'truncate' ? truncateTable(name) : dropTable(name));
+      onShowToast?.(action === 'truncate' ? `Truncated "${name}"` : `Dropped "${name}"`);
+      onTableMutated?.(name);
+    } catch (err: any) {
+      onShowToast?.(err.message || `Failed to ${action} "${name}"`, 'error');
+    }
+  };
+
+  const readOnly = Boolean(getConfig().readOnly);
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu
+    ? [
+        {
+          id: 'open-table',
+          label: 'Open Table',
+          icon: <Table size={13} />,
+          shortcut: '↵',
+          onClick: () => activateTable(contextMenu.table.name)
+        },
+        {
+          id: 'query-sql',
+          label: 'Query in SQL Runner',
+          icon: <Terminal size={13} />,
+          onClick: () => onQueryTable?.(contextMenu.table.name)
+        },
+        {
+          id: 'copy-name',
+          label: 'Copy Table Name',
+          icon: <Copy size={13} />,
+          onClick: async () => {
+            const ok = await copyToClipboard(contextMenu.table.name);
+            if (ok) {
+              onShowToast?.(`Copied table name "${contextMenu.table.name}" to clipboard`);
+            }
+          }
+        },
+        { separator: true },
+        {
+          id: 'truncate-table',
+          label: 'Truncate Table',
+          icon: <Eraser size={13} />,
+          danger: true,
+          disabled: readOnly,
+          onClick: () => void runTableMutation(contextMenu.table.name, 'truncate')
+        },
+        {
+          id: 'drop-table',
+          label: 'Drop Table',
+          icon: <Trash2 size={13} />,
+          danger: true,
+          disabled: readOnly,
+          onClick: () => void runTableMutation(contextMenu.table.name, 'drop')
+        }
+      ]
+    : [];
 
   return (
     <aside
@@ -161,6 +233,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   else itemRefs.current.delete(tbl.name);
                 }}
                 onClick={() => activateTable(tbl.name)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onActivate?.();
+                  setHighlightedName(tbl.name);
+                  setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    table: tbl
+                  });
+                }}
                 className={`relative w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-mono text-left group border ${
                   isSelected
                     ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-medium shadow-sm border-slate-200 dark:border-zinc-700/60'
@@ -212,6 +295,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>{tables.length} schemas loaded</span>
         </div>
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </aside>
   );
 };
