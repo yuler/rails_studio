@@ -17,3 +17,6 @@ frontend/dist/
 .agents/skills/intro/scripts/node_modules/
 .agents/skills/intro/audio/
 assets/intro-record.mp4
+
+# Worktrees
+.worktrees/

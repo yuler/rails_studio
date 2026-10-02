@@ -162,6 +162,9 @@ export const App: React.FC = () => {
 
   // Handle table selection from sidebar
   const handleSelectTable = (tableName: string) => {
+    if (activeTab !== 'tables') {
+      setActiveTab('tables');
+    }
     if (tableName === selectedTable) return;
     if (stagedChanges.size > 0) {
       if (!confirm('You have unsaved changes in the current table. Discard them?')) {
@@ -173,6 +176,19 @@ export const App: React.FC = () => {
     setPage(1);
     setSortBy(undefined);
     setFilters([]);
+  };
+
+  const handleQueryTable = (tableName: string) => {
+    setActiveTab('sql');
+    setSqlTableQuery({ name: tableName, id: Date.now() });
+    setNavPane('records');
+  };
+
+  const handleOpenInsertModalForTable = (tableName?: string) => {
+    if (tableName && tableName !== selectedTable) {
+      handleSelectTable(tableName);
+    }
+    setShowInsertModal(true);
   };
 
   // Sorting
@@ -365,15 +381,14 @@ export const App: React.FC = () => {
             tables={tables}
             selectedTable={selectedTable}
             onSelectTable={handleSelectTable}
-            onQueryTable={
-              activeTab === 'sql'
-                ? (name) => setSqlTableQuery({ name, id: Date.now() })
-                : undefined
-            }
+            onQueryTable={handleQueryTable}
             loading={loadingOverview}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             navActive={navPane === 'sidebar'}
             onActivate={() => setNavPane('sidebar')}
+            onOpenInsertModal={handleOpenInsertModalForTable}
+            onRefreshTables={loadOverview}
+            onShowToast={showToast}
           />
         )}
 
@@ -411,6 +426,7 @@ export const App: React.FC = () => {
               onOpenForeignKey={(targetTable, targetId) =>
                 setFkDrawer({ table: targetTable, id: targetId })
               }
+              onShowToast={showToast}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-zinc-500 font-mono text-xs">

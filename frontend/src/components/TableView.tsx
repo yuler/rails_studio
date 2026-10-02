@@ -20,7 +20,9 @@ import {
   Maximize2,
   Check,
   Edit2,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  FileJson
 } from 'lucide-react';
 import { TableSchema, ColumnMeta, FilterCondition, StagedChange } from '../types';
 import { ForeignKeySelect } from './ForeignKeySelect';
@@ -28,6 +30,7 @@ import { BooleanToggle, coerceBoolean } from './BooleanToggle';
 import { chordMatches, shortcutLabel } from '../shortcuts';
 import { isOverlayOpen, useOverlay, useShortcut } from '../useShortcut';
 import { ShortcutKeys } from './ShortcutKeys';
+import { ContextMenu, ContextMenuItem, copyToClipboard } from './ContextMenu';
 
 function formatForDateTimeLocal(val: any): string {
   if (!val) return '';
@@ -101,6 +104,7 @@ interface TableViewProps {
   onToggleFilterBar?: () => void;
   navActive?: boolean;
   onActivate?: () => void;
+  onShowToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 export const TableView: React.FC<TableViewProps> = ({
@@ -126,13 +130,23 @@ export const TableView: React.FC<TableViewProps> = ({
   showFilterBar: propShowFilterBar,
   onToggleFilterBar,
   navActive = false,
-  onActivate
+  onActivate,
+  onShowToast
 }) => {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<any>>(new Set());
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [internalShowFilterBar, setInternalShowFilterBar] = useState(false);
   const showFilterBar = propShowFilterBar !== undefined ? propShowFilterBar : internalShowFilterBar;
   const toggleFilterBar = onToggleFilterBar || (() => setInternalShowFilterBar((prev) => !prev));
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    row: Record<string, any>;
+    rowId: any;
+    column?: string;
+  } | null>(null);
 
   // Cell selection & inline editing state (like Prisma Studio)
   const [focusedCell, setFocusedCell] = useState<{ rowId: any; column: string } | null>(null);
@@ -165,6 +179,7 @@ export const TableView: React.FC<TableViewProps> = ({
     setEditingCell(null);
     setFocusedCell(null);
     setFocusedRowIndex(0);
+    setContextMenu(null);
   }, [schema.table_name, page]);
 
   // Focus and select input once when entering edit mode
@@ -364,6 +379,128 @@ export const TableView: React.FC<TableViewProps> = ({
   const handleCancelEdit = () => {
     setEditingCell(null);
   };
+
+  const handleRowContextMenu = (
+    e: React.MouseEvent,
+    row: Record<string, any>,
+    rowIdx: number,
+    column?: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onActivate?.();
+
+    const rowId = getRowId(row);
+    setFocusedRowIndex(rowIdx);
+    if (column) {
+      setFocusedCell({ rowId, column });
+    }
+
+    if (!selectedRowIds.has(rowId)) {
+      setSelectedRowIds(new Set([rowId]));
+    }
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      row,
+      rowId,
+      column
+    });
+  };
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu
+    ? (() => {
+        const { row, rowId, column } = contextMenu;
+        const colMeta = column ? schema.columns.find((c) => c.name === column) : undefined;
+        const cellVal = column ? getCellCurrentValue(rowId, column, row[column]) : undefined;
+        const isAutoPk = Boolean(colMeta?.primary && (colMeta.type === 'integer' || colMeta.name === 'id'));
+        const canEdit = Boolean(column) && !isAutoPk;
+        const selCount = selectedRowIds.has(rowId) ? selectedRowIds.size : 1;
+
+        const items: ContextMenuItem[] = [
+          {
+            id: 'edit-cell',
+            label: 'Edit Cell',
+            icon: <Edit2 size={13} />,
+            shortcut: '↵',
+            disabled: !canEdit,
+            onClick: () => {
+              if (column && canEdit) {
+                handleStartEdit(rowId, column, row[column]);
+              }
+            }
+          },
+          {
+            id: 'copy-cell',
+            label: 'Copy Cell Value',
+            icon: <Copy size={13} />,
+            disabled: !column,
+            onClick: async () => {
+              const str = cellVal === null || cellVal === undefined ? '' : String(cellVal);
+              const ok = await copyToClipboard(str);
+              if (ok) onShowToast?.('Copied cell value to clipboard');
+            }
+          },
+          {
+            id: 'copy-row-json',
+            label: 'Copy Row as JSON',
+            icon: <FileJson size={13} />,
+            onClick: async () => {
+              const rowObj: Record<string, any> = {};
+              schema.columns.forEach((c) => {
+                rowObj[c.name] = getCellCurrentValue(rowId, c.name, row[c.name]);
+              });
+              const ok = await copyToClipboard(JSON.stringify(rowObj, null, 2));
+              if (ok) onShowToast?.('Copied row as JSON to clipboard');
+            }
+          }
+        ];
+
+        if (colMeta?.foreign_key && cellVal !== null && cellVal !== undefined && cellVal !== '') {
+          const targetTable = colMeta.foreign_key.to_table;
+          items.push({
+            id: 'go-foreign-key',
+            label: `Go to ${targetTable} (${cellVal})`,
+            icon: <Link2 size={13} />,
+            onClick: () => onOpenForeignKey(targetTable, cellVal)
+          });
+        }
+
+        items.push(
+          { separator: true },
+          {
+            id: 'insert-row',
+            label: 'Insert Record',
+            icon: <Plus size={13} />,
+            shortcut: shortcutLabel('insertRow'),
+            onClick: onOpenInsertModal
+          },
+          {
+            id: 'delete-rows',
+            label: selCount > 1 ? `Delete ${selCount} Rows` : 'Delete Row',
+            icon: <Trash2 size={13} />,
+            shortcut: shortcutLabel('deleteRows'),
+            danger: true,
+            onClick: async () => {
+              const targetIds = selectedRowIds.has(rowId) ? Array.from(selectedRowIds) : [rowId];
+              const ok = await onDeleteSelectedRows(targetIds);
+              if (ok !== false) setSelectedRowIds(new Set());
+            }
+          },
+          { separator: true },
+          {
+            id: 'refresh-table',
+            label: 'Refresh Table',
+            icon: <RefreshCw size={13} />,
+            shortcut: shortcutLabel('refreshTable'),
+            onClick: handleRefreshClick
+          }
+        );
+
+        return items;
+      })()
+    : [];
 
   // Cell keyboard navigation & shortcuts
   const handleCellKeyDown = (e: React.KeyboardEvent, rowId: any, column: string, currentVal: any) => {
@@ -802,6 +939,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     key={rowId ?? rowIdx}
                     data-row-focus={rowIdx}
                     onClick={() => setFocusedRowIndex(rowIdx)}
+                    onContextMenu={(e) => handleRowContextMenu(e, row, rowIdx)}
                     className={`transition-colors ${
                       isSelected
                         ? 'bg-slate-100/80 dark:bg-zinc-800/50'
@@ -809,7 +947,10 @@ export const TableView: React.FC<TableViewProps> = ({
                     } ${isRowFocused ? 'relative z-[1] shadow-[inset_0_0_0_1px_#94a3b8] dark:shadow-[inset_0_0_0_1px_#71717a]' : ''}`}
                   >
                     {/* Row Select */}
-                    <td className="p-2.5 text-center border-r border-slate-100 dark:border-zinc-800/40">
+                    <td
+                      className="p-2.5 text-center border-r border-slate-100 dark:border-zinc-800/40"
+                      onContextMenu={(e) => handleRowContextMenu(e, row, rowIdx)}
+                    >
                       <input
                         type="checkbox"
                         tabIndex={-1}
@@ -820,7 +961,10 @@ export const TableView: React.FC<TableViewProps> = ({
                     </td>
 
                     {/* Row Index */}
-                    <td className="p-2.5 text-center text-[10px] text-slate-400 dark:text-zinc-600 border-r border-slate-100 dark:border-zinc-800/40">
+                    <td
+                      className="p-2.5 text-center text-[10px] text-slate-400 dark:text-zinc-600 border-r border-slate-100 dark:border-zinc-800/40"
+                      onContextMenu={(e) => handleRowContextMenu(e, row, rowIdx)}
+                    >
                       {(page - 1) * perPage + rowIdx + 1}
                     </td>
 
@@ -842,6 +986,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           onClick={() => setFocusedCell({ rowId, column: col.name })}
                           onDoubleClick={() => !isAutoPk && col.type !== 'boolean' && handleStartEdit(rowId, col.name, row[col.name])}
                           onKeyDown={(e) => !isEditing && handleCellKeyDown(e, rowId, col.name, row[col.name])}
+                          onContextMenu={(e) => handleRowContextMenu(e, row, rowIdx, col.name)}
                           className={`${
                             isEditing ? 'p-0 relative' : 'p-2.5'
                           } border-r border-slate-100 dark:border-zinc-800/40 whitespace-nowrap max-w-sm truncate relative group outline-none transition-all ${
@@ -1219,6 +1364,15 @@ export const TableView: React.FC<TableViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );
