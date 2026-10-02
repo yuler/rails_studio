@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
+### Added
+
+- Context menu for tables and record rows
+- One shortcut registry for every data and view action
+
+### Changed
+
+- Drop RubyGems MFA requirement from gemspec
+
 ## [0.1.0] - 2026-09-21
 
 ### Added
@@ -17,5 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQL query runner and interactive Rails console
 - Command palette, keyboard shortcuts, and light/dark themes
 
-[Unreleased]: https://github.com/yuler/rails_studio/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yuler/rails_studio/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/yuler/rails_studio/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yuler/rails_studio/releases/tag/v0.1.0

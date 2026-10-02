@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rails_studio (0.1.0)
+    rails_studio (0.2.0)
       rails (>= 7.0.0)
 
 GEM
