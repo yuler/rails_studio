@@ -14,9 +14,10 @@ frontend/node_modules/
 frontend/dist/
 
 # Intro
-.agents/skills/intro/scripts/node_modules/
-.agents/skills/intro/audio/
-assets/intro-record.mp4
+video/node_modules/
+video/out/
+video/public/capture/
+video/public/audio/
 
 # macOS
 .DS_Store

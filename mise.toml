@@ -37,10 +37,29 @@ run = "pnpm --dir frontend run build"
 description = "Run automated test suite"
 run = "bin/rails test"
 
-[tasks."intro:record"]
-description = "Record the README intro (Omarchy fullscreen) → assets/intro-record.mp4. SKIP_RECORD=1 to dry-run."
-run = "bash .agents/skills/intro/scripts/record.sh"
+[tasks."intro:seed"]
+description = "Load intro demo data into the dummy app (replaces its development data)"
+run = "cd test/dummy && bin/rails runner ../../video/capture/seed.rb"
 
-[tasks."intro:encode"]
-description = "Burn captions and narration onto assets/intro-record.mp4 → assets/intro.mp4"
-run = "bash .agents/skills/intro/scripts/encode.sh"
+[tasks."intro:capture"]
+description = "Record real UI clips with headless Chrome → video/public/capture/. SCENES=sql,fk to redo some."
+depends = ["intro:seed"]
+run = """
+pnpm --dir video install
+pnpm --dir video run capture
+"""
+
+[tasks."intro:studio"]
+description = "Preview the intro in Remotion Studio"
+run = """
+pnpm --dir video run audio
+pnpm --dir video run studio
+"""
+
+[tasks."intro:render"]
+description = "Synthesize music + SFX, render video/out/intro.mp4 and assets/intro-poster.jpg"
+run = """
+pnpm --dir video run audio
+pnpm --dir video run render
+pnpm --dir video run poster
+"""

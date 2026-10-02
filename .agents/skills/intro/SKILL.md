@@ -1,74 +1,64 @@
 ---
 name: intro
-description: Record and encode the Rails Studio README intro video (Omarchy + Puppeteer + captions.ass + edge-tts). Use when the user asks to record or update assets/intro.mp4, the README screencast, or mise intro:record / intro:encode.
+description: Capture and render the Rails Studio README intro video (Puppeteer headless capture + Remotion). Use when the user asks to update the intro video, README hero video, launch video, assets/intro-poster.jpg, or mise intro:capture / intro:render.
 ---
 
 # Intro
 
-Re-record `assets/intro.mp4` after UI or feature changes. Do not improvise a new capture stack.
+The intro is a Framer-style launch video: hook copy, an install card, then one persistent product window that swaps real UI clips while the camera moves, then an outro. Everything lives in `video/`. Audio is synthesized locally (no downloaded tracks): background music plus click, whoosh, pop, and typing effects. Do not reintroduce screen recording, TTS, or burned-in subtitles.
 
 ## Preconditions
 
-- Dummy app is reachable at `STUDIO_URL` (default `http://localhost:3000/rails_studio`).
-- Omarchy / Hyprland (`omarchy capture`, `omarchy launch webapp`, `hyprctl eval`, `grim`, `tesseract`).
-- `google-chrome-stable`, `ffmpeg`, `jq`, `node`, `uv` (Microsoft Edge neural TTS via `edge-tts`).
-- Recording **takes over the focused monitor** (workspace 9, Chrome fullscreen). Do not touch mouse/keyboard.
+- Dummy app running: `mise run dev:rails` (default `STUDIO_URL=http://127.0.0.1:3000/rails_studio`).
+- Frontend assets built (`mise run build`) so the dummy app serves the current UI.
+- Google Chrome installed (`CHROME_PATH` to override), `ffmpeg`, `pnpm`, `uv` (audio synthesis).
+- Capture is headless; it does not take over the screen.
+- Run `intro:capture` before `intro:studio` / `intro:render`: `Product.tsx` imports the gitignored `video/public/capture/manifest.json`.
 
 ## Commands
 
 From the repo root:
 
 ```bash
-SKIP_RECORD=1 mise run intro:record          # walkthrough only
-mise run intro:record                        # → assets/intro-record.mp4
-STUDIO_URL=http://127.0.0.1:3001/rails_studio mise run intro:record
-mise run intro:encode                        # captions + narration → assets/intro.mp4
-EDGE_TTS_VOICE=en-US-JennyNeural mise run intro:encode   # female voice
+mise run intro:capture             # seeds demo data, records every scene
+SCENES=sql,fk mise run intro:capture   # re-record some scenes, keep the rest
+mise run intro:studio              # preview in Remotion Studio
+mise run intro:render              # audio + video/out/intro.mp4 + assets/intro-poster.jpg
 ```
 
-`intro:record` waits until Chrome’s “exit fullscreen” toast has disappeared, then starts Omarchy screenrecord, holds on the UI for the intro narration, then runs the Puppeteer demo and copies the capture to `assets/intro-record.mp4`.
-
-`intro:encode` reads `scripts/captions.ass`, synthesizes one MP3 per Dialogue line (default male `en-US-GuyNeural`), then burns those captions and muxes the narration onto `assets/intro-record.mp4` in a single 1080p encode.
-
-Outputs:
-
-- `assets/intro-record.mp4` — raw capture (gitignored)
-- `assets/intro-poster.jpg`
-- `assets/intro.mp4` — 1920×1080, captions + narration (README)
-- `.agents/skills/intro/audio/*.mp3` — one clip per caption, named `{nn}_{start}_{end}_{slug}.mp3` (gitignored)
-
-## After a feature lands
-
-1. Extend `scripts/demo.mjs` with a named `log('step')` beat.
-2. Dry-run `SKIP_RECORD=1`.
-3. Align `scripts/captions.ass` to `/tmp/rails-studio-demo-steps.log` using **caption time ≈ demo `t` + 2s**.
-4. `mise run intro:record`
-5. `mise run intro:encode`
-6. Spot-check frames and audio.
-
-## Fragile facts
-
-| Pitfall                       | Required approach                                               |
-| ----------------------------- | --------------------------------------------------------------- |
-| Hyprland is Lua               | `hyprctl eval 'hl.dispatch(hl.dsp.focus({ workspace = "9" }))'` |
-| Existing Chrome ignores CDP   | Dedicated `--user-data-dir` + `--remote-debugging-port=9222`    |
-| `omarchy launch webapp` execs | Always background it (`&`)                                      |
-| Puppeteer locators            | Click via `evaluateHandle` + `boundingBox`                      |
-| Column headers                | Concatenated (`titlestring`)                                    |
-| Console Enter                 | Autocomplete steals Enter — click **Eval**                      |
-| Fullscreen toast              | Wait until `grim` + `tesseract` no longer see it, then capture  |
-| `pipefail` + `head`           | Use `awk 'NR==1'`                                               |
+Then upload `video/out/intro.mp4` through the GitHub web UI (drag into an issue or PR comment) and replace the `user-attachments` URL in `README.md`. The MP4 is not committed.
 
 ## Layout
 
-```
-.agents/skills/intro/
-  SKILL.md
-  scripts/record.sh
-  scripts/demo.mjs
-  scripts/encode.sh
-  scripts/captions.ass
-  scripts/package.json
-  scripts/voice.py
-  audio/                 # generated by intro:encode (gitignored)
-```
+| Path                           | Role                                                              |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `video/capture/seed.rb`        | Demo data (18 users, 36 articles); replaces dummy dev data        |
+| `video/capture/capture.mjs`    | One `setup` + one `scenes` entry per clip; writes `manifest.json` |
+| `video/public/capture/`        | `<scene>.webm`, `<scene>.png`, `manifest.json` (gitignored)       |
+| `video/audio/generate.py`      | Synthesizes `music.wav` + SFX into `video/public/audio/`          |
+| `video/src/sound.tsx`          | `Music` and `Sfx`; per-effect levels in `LEVEL`                   |
+| `video/src/scenes/Hook.tsx`    | "Prisma has Studio. Drizzle has Studio. Now Rails does too."      |
+| `video/src/scenes/Install.tsx` | Typed Gemfile + routes card                                       |
+| `video/src/scenes/Product.tsx` | `SHOTS`: clip, seconds, headline, trim, camera, optional `pan`    |
+| `video/src/scenes/Outro.tsx`   | Logo, `gem "rails_studio"`, GitHub URL                            |
+
+## After a feature lands
+
+1. Add a scene to `scenes` and `setup` in `capture.mjs`.
+2. `SCENES=<name> mise run intro:capture`; check `video/public/capture/<name>.png`.
+3. Add a `SHOTS` entry in `Product.tsx`; tune `camera` with `npx remotion still src/index.ts Intro /tmp/f.jpg --frame N` from `video/`.
+4. `mise run intro:render`, spot-check frames, upload.
+
+## Fragile facts
+
+| Pitfall                           | Required approach                                                     |
+| --------------------------------- | --------------------------------------------------------------------- |
+| Screencast ignores emulated DPR   | `--force-device-scale-factor=2` + `defaultViewport: null`             |
+| `--window-size` includes chrome   | Resize via `Browser.setWindowBounds` until viewport is 1440×900       |
+| No cursor in headless capture     | `injectCursor` draws a fake cursor and click ring from mouse events   |
+| Button text includes shortcuts    | Match with `startsWith` ("Run" vs "SQL Runner")                       |
+| Off-screen cells                  | Mouse clicks only hit the viewport; pick visible targets              |
+| Clip longer than shot             | `Product.tsx` speeds the clip up (`playbackRate`) to fit `seconds`    |
+| Console opens from its header bar | Click the bottom bar, not a button                                    |
+| Click/typing sounds drift         | They come from `manifest.json` events; recapture after editing scenes |
+| Render killed (`Killed: 9`)       | Memory: keep `--concurrency 3` for 2880px clips                       |
